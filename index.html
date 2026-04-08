@@ -1,0 +1,3287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PolymerChem Dashboard</title>
+
+<!-- =====================================================================
+     FILE PATHS — Edit these to point to your data files
+     ===================================================================== -->
+<script>
+const FILE_PATHS = {
+  monomerSmiles:   "./data_dashboard/Visual/monomer_smiles.json",
+  monomerFeatures: "./data_dashboard/Visual/monomer_features.json",
+  smilesSvgDir: "./data_dashboard/Visual/monomer_svg",
+
+  oligomerFiles: [
+    { name: "High Target",          path: "./data_dashboard/Visual/mlp_inference_results_high_target.csv",         version: "2" },
+    { name: "Low Target",           path: "./data_dashboard/Visual/mlp_inference_results_low_target.csv",          version: "2" },
+    { name: "High Target (Explore)",path: "./data_dashboard/Visual/mlp_inference_results_high_target_Explore.csv", version: "2" },
+  ],
+  loadAllOligoFiles: true,
+
+  metadynamics: {
+    "A3413": "./data_dashboard/A3413/Metadynamics/Analysis/FES_2D_normalized.svg",
+    "M2901": "./data_dashboard/M2901/Metadynamics/Analysis/FES_2D_normalized.svg",
+    "M0591": "./data_dashboard/M0591/Metadynamics/Analysis/FES_2D_normalized.svg",
+    "A0141": "./data_dashboard/A0141/Metadynamics/Analysis/FES_2D_normalized.svg",
+    "D":     "./data_dashboard/D/Metadynamics/Analysis/FES_2D_normalized.svg",
+    "D5927": "./data_dashboard/D5927/Metadynamics/Analysis/FES_2D_normalized.svg",
+    "M0085": "./data_dashboard/M0085/Metadynamics/Analysis/FES_2D_normalized.svg",
+    "A1405": "./data_dashboard/A1405/Metadynamics/Analysis/FES_2D_normalized.svg",
+    "M0081": "./data_dashboard/M0081/Metadynamics/Analysis/FES_2D_normalized.svg",
+    "A0144": "./data_dashboard/A0144/Metadynamics/Analysis/FES_2D_normalized.svg",
+    "A3407": "./data_dashboard/A3407/Metadynamics/Analysis/FES_2D_normalized.svg",
+    "M0562": "./data_dashboard/M0562/Metadynamics/Analysis/FES_2D_normalized.svg",
+    "M3342": "./data_dashboard/M3342/Metadynamics/Analysis/FES_2D_normalized.svg",
+    "M0326": "./data_dashboard/M0326/Metadynamics/Analysis/FES_2D_normalized.svg",
+    "A3400": "./data_dashboard/A3400/Metadynamics/Analysis/FES_2D_normalized.svg",
+    "M0280": "./data_dashboard/M0280/Metadynamics/Analysis/FES_2D_normalized.svg"
+  }
+};
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+<style>
+:root {
+  --bg:       #f5f7fa;
+  --panel:    #ffffff;
+  --card:     #ffffff;
+  --border:   #e2e8f0;
+  --accent:   #0a8a6a;
+  --accent2:  #2563eb;
+  --accent3:  #dc2626;
+  --accent4:  #d97706;
+  --text:     #1e293b;
+  --muted:    #64748b;
+  --high:     #0a8a6a;
+  --med:      #d97706;
+  --low:      #dc2626;
+  --font-mono: 'Space Mono', monospace;
+  --font-body: 'DM Sans', sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── Header ── */
+header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 2rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+header .logo {
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  color: var(--accent);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+header .subtitle {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-left: auto;
+  font-family: var(--font-mono);
+}
+.pill {
+  background: rgba(0,229,180,0.12);
+  color: var(--accent);
+  border: 1px solid rgba(0,229,180,0.3);
+  border-radius: 20px;
+  padding: 2px 10px;
+  font-size: 0.7rem;
+  font-family: var(--font-mono);
+}
+
+/* ── Nav tabs ── */
+nav {
+  display: flex;
+  gap: 0;
+  padding: 0 2rem;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+nav button {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 0.75rem 1.25rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+nav button:hover { color: var(--text); }
+nav button.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* ── Sections ── */
+.section { display: none; padding: 2rem; }
+.section.active { display: block; }
+
+/* ── Section headings ── */
+.section-title {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.section-title::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* ── Grid layouts ── */
+.monomer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1rem;
+}
+
+.monomer-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+.monomer-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--card-accent, var(--accent));
+  transform: scaleX(0);
+  transition: transform 0.2s;
+}
+.monomer-card:hover {
+  border-color: var(--card-accent, var(--accent));
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px var(--card-glow, rgba(10,138,106,0.12));
+}
+.monomer-card:hover::before { transform: scaleX(1); }
+.monomer-card { box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+
+/* Charge-tinted cards */
+.monomer-card.card-pos {
+  --card-accent: #15803d;
+  --card-glow: rgba(22,163,74,0.14);
+  border-left: 3px solid rgba(22,163,74,0.45);
+  background: linear-gradient(135deg, rgba(22,163,74,0.04) 0%, #fff 60%);
+}
+.monomer-card.card-neg {
+  --card-accent: #b91c1c;
+  --card-glow: rgba(220,38,38,0.14);
+  border-left: 3px solid rgba(220,38,38,0.45);
+  background: linear-gradient(135deg, rgba(220,38,38,0.04) 0%, #fff 60%);
+}
+.monomer-card.card-hydro {
+  --card-accent: #92400e;
+  --card-glow: rgba(217,119,6,0.14);
+  border-left: 3px solid rgba(217,119,6,0.45);
+  background: linear-gradient(135deg, rgba(217,119,6,0.05) 0%, #fff 60%);
+}
+.monomer-card.card-neu {
+  --card-accent: #2563eb;
+  --card-glow: rgba(37,99,235,0.12);
+  border-left: 3px solid rgba(37,99,235,0.3);
+  background: linear-gradient(135deg, rgba(37,99,235,0.03) 0%, #fff 60%);
+}
+
+.monomer-id {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 0.3rem;
+}
+.charge-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-family: var(--font-mono);
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-bottom: 0.5rem;
+}
+.charge-pos { background: rgba(22,163,74,0.12); color: #15803d; border: 1px solid rgba(22,163,74,0.35); }
+.charge-neg { background: rgba(220,38,38,0.10); color: #b91c1c; border: 1px solid rgba(220,38,38,0.3); }
+.charge-neu { background: rgba(100,116,139,0.10); color: #475569; border: 1px solid rgba(100,116,139,0.2); }
+.charge-hydro { background: rgba(234,179,8,0.13); color: #92400e; border: 1px solid rgba(234,179,8,0.4); }
+
+.monomer-smiles {
+  font-size: 0.65rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 0.5rem;
+}
+.prop-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.prop-val { color: var(--text); font-family: var(--font-mono); }
+
+/* ── Tooltip ── */
+#tooltip {
+  position: fixed;
+  display: none;
+  background: #ffffff;
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  padding: 1.2rem;
+  z-index: 9999;
+  min-width: 320px;
+  max-width: 420px;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.15);
+  pointer-events: none;
+}
+.tt-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+.tt-id {
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  color: var(--accent);
+  font-weight: 700;
+}
+.tt-smiles {
+  font-size: 0.65rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  margin-bottom: 0.75rem;
+  word-break: break-all;
+  line-height: 1.4;
+}
+.tt-props {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.3rem 1rem;
+}
+.tt-prop { display: flex; justify-content: space-between; font-size: 0.75rem; }
+.tt-pkey { color: var(--muted); }
+.tt-pval { font-family: var(--font-mono); color: var(--text); }
+.tt-has-fes {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.7rem;
+  color: var(--accent);
+  font-family: var(--font-mono);
+}
+
+/* ── Metadynamics section ── */
+.meta-grid {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+.meta-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.meta-btn {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.7rem 1rem;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.meta-btn:hover, .meta-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(0,229,180,0.06);
+}
+.meta-btn .dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+.fes-container {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem;
+  min-height: 280px;
+  max-height: 420px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.fes-container svg, .fes-container img {
+  max-width: 80%;
+  max-height: 360px;
+  height: auto;
+  border-radius: 8px;
+}
+.fes-placeholder {
+  color: var(--muted);
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+/* ── Oligomer section ── */
+.filter-bar {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+  align-items: center;
+}
+.filter-group { display: flex; gap: 0.5rem; align-items: center; }
+.filter-label { font-size: 0.75rem; color: var(--muted); font-family: var(--font-mono); }
+.filter-btn {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  transition: all 0.15s;
+}
+.filter-btn:hover { border-color: var(--accent); color: var(--text); }
+.filter-btn.active-high { border-color: var(--high); color: var(--high); background: rgba(0,229,180,0.08); }
+.filter-btn.active-med  { border-color: var(--med);  color: var(--med);  background: rgba(255,209,102,0.08); }
+.filter-btn.active-low  { border-color: var(--low);  color: var(--low);  background: rgba(255,107,107,0.08); }
+.filter-btn.active      { border-color: var(--accent2); color: var(--accent2); background: rgba(91,143,255,0.08); }
+
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.stat-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem;
+  text-align: center;
+}
+.stat-num {
+  font-family: var(--font-mono);
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 0.3rem;
+}
+.stat-lbl { font-size: 0.72rem; color: var(--muted); }
+
+.oligo-table-wrap {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: auto;
+  max-height: 480px;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+thead th {
+  background: var(--panel);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 1px;
+  padding: 0.75rem 1rem;
+  text-align: left;
+  position: sticky;
+  top: 0;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+}
+thead th:hover { color: var(--text); }
+thead th.sorted { color: var(--accent); }
+tbody tr {
+  border-bottom: 1px solid rgba(37,46,66,0.5);
+  transition: background 0.15s;
+}
+tbody tr:hover { background: rgba(0,229,180,0.04); }
+tbody td { padding: 0.6rem 1rem; }
+.mono-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.mono-chip {
+  display: inline-block;
+  background: rgba(91,143,255,0.15);
+  color: var(--accent2);
+  border: 1px solid rgba(91,143,255,0.25);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 0.65rem;
+  font-family: var(--font-mono);
+}
+.score-dot {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  margin-right: 4px;
+}
+.class-badge {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.class-0 { background: rgba(220,38,38,0.10); color: #b91c1c; }
+.class-1 { background: rgba(217,119,6,0.12); color: #92400e; }
+.class-2 { background: rgba(22,163,74,0.12); color: #15803d; }
+
+/* ── Charts section ── */
+.chart-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+.chart-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem;
+}
+.chart-card h3 {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #475569;
+  margin-bottom: 1rem;
+}
+.chart-wrap { position: relative; height: 260px; }
+
+
+/* ── Oligomer row hover tooltip ── */
+#oligo-tooltip {
+  position: fixed;
+  display: none;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1rem;
+  z-index: 9999;
+  width: 380px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+  pointer-events: none;
+}
+.ott-title {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-bottom: 0.6rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.ott-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 0.8rem; }
+.ott-row { display: flex; justify-content: space-between; font-size: 0.78rem; margin-bottom: 3px; }
+.ott-key { color: var(--muted); }
+.ott-val { font-family: var(--font-mono); color: var(--text); font-weight: 600; }
+.ott-fes-wrap {
+  margin-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+}
+.ott-fes-title {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--muted);
+  margin-bottom: 0.4rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.ott-fes-grid {
+  display: grid;
+  gap: 6px;
+}
+.ott-fes-item { text-align: center; }
+.ott-fes-item img, .ott-fes-item svg {
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+.ott-fes-label {
+  font-size: 0.65rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  margin-top: 2px;
+}
+.ott-struct-wrap {
+  margin-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+}
+.ott-struct-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 6px;
+}
+.ott-struct-item { text-align: center; }
+.ott-struct-item img {
+  width: 80px; height: 80px;
+  object-fit: contain;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #fff;
+}
+.ott-struct-label {
+  font-size: 0.62rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  margin-top: 2px;
+}
+
+/* ── Monomer color legend ── */
+.mono-legend {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  font-size: 0.72rem;
+  font-family: var(--font-mono);
+}
+.legend-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+/* ── Fullscreen oligomer popup ── */
+#oligo-popup-overlay {
+  position: fixed; inset: 0;
+  background: rgba(15,23,42,0.75);
+  z-index: 10000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  backdrop-filter: blur(4px);
+}
+#oligo-popup-overlay.open { display: flex; }
+#oligo-popup {
+  background: #fff;
+  border-radius: 16px;
+  width: min(1200px, 95vw);
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 30px 90px rgba(0,0,0,0.35);
+  display: flex;
+  flex-direction: column;
+}
+.popup-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 1;
+  border-radius: 16px 16px 0 0;
+}
+.popup-title {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent);
+  flex: 1;
+}
+.popup-close {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  width: 30px; height: 30px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 1rem;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.popup-close:hover { background: var(--bg); color: var(--text); }
+.popup-save-btn {
+  background: var(--accent);
+  border: none;
+  border-radius: 7px;
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  padding: 5px 14px;
+  cursor: pointer;
+  display: flex; align-items: center; gap: 6px;
+  transition: opacity 0.15s;
+}
+.popup-save-btn:hover { opacity: 0.88; }
+.popup-save-btn.svg-btn { background: var(--accent2); }
+.popup-body {
+  padding: 1.5rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+.popup-section-title {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.75rem;
+}
+.popup-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+.popup-prop {
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.popup-prop-key { font-size: 0.65rem; color: var(--muted); font-family: var(--font-mono); }
+.popup-prop-val { font-size: 0.9rem; font-family: var(--font-mono); font-weight: 700; color: var(--text); }
+.popup-struct-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px,1fr));
+  gap: 0.75rem;
+}
+.popup-struct-item { text-align: center; }
+.popup-struct-item img {
+  width: 100px; height: 100px;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+.popup-struct-label {
+  font-size: 0.65rem;
+  font-family: var(--font-mono);
+  color: var(--muted);
+  margin-top: 3px;
+}
+.popup-fes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem;
+}
+.popup-fes-item { text-align: center; }
+.popup-fes-item img { width: 100%; border-radius: 8px; border: 1px solid var(--border); }
+.popup-fes-label { font-size: 0.65rem; font-family: var(--font-mono); color: var(--muted); margin-top: 3px; }
+.popup-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 0.75rem; }
+.popup-chip {
+  border-radius: 6px; padding: 3px 9px;
+  font-size: 0.72rem; font-family: var(--font-mono);
+}
+.popup-chart-row {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+.popup-chart-card {
+  background: var(--bg);
+  border-radius: 10px;
+  padding: 1rem;
+}
+.popup-chart-card h4 {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.75rem;
+}
+.popup-chart-wrap { position: relative; height: 160px; }
+
+/* ── Analytics extras ── */
+.analytics-filter-bar {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: center;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.5rem;
+}
+.analytics-filter-bar .filter-label { font-size: 0.72rem; color: var(--muted); font-family: var(--font-mono); }
+.logp-range-val { font-family: var(--font-mono); font-size: 0.75rem; color: var(--accent2); min-width: 60px; }
+.kmeans-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem;
+}
+.kmeans-card h3 {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #475569;
+  margin-bottom: 1rem;
+}
+.cluster-legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 0.75rem; }
+.cluster-badge {
+  font-size: 0.65rem; font-family: var(--font-mono);
+  border-radius: 5px; padding: 2px 8px;
+}
+.pairplot-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem;
+  grid-column: 1 / -1;
+}
+.pairplot-card h3 {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #475569;
+  margin-bottom: 1rem;
+}
+.pairplot-grid {
+  display: grid;
+  gap: 4px;
+}
+.pairplot-cell {
+  background: var(--bg);
+  border-radius: 6px;
+  position: relative;
+}
+.pairplot-diag {
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-size: 0.7rem; color: var(--muted);
+  font-weight: 700;
+}
+.pairplot-canvas { border-radius: 6px; }
+
+/* ── Metadynamics enhanced ── */
+.meta-right-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.fes-top-row {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+.fes-props-panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem;
+  min-width: 200px;
+  display: none;
+}
+.fes-prop-row { display: flex; justify-content: space-between; font-size: 0.75rem; padding: 3px 0; border-bottom: 1px solid var(--border); }
+.fes-prop-row:last-child { border-bottom: none; }
+.fes-prop-key { color: var(--muted); }
+.fes-prop-val { font-family: var(--font-mono); font-weight: 600; }
+.fes-freq-panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem;
+  display: none;
+}
+.fes-freq-panel h4 {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.75rem;
+}
+.freq-table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
+.freq-table th { text-align: left; padding: 4px 8px; font-family: var(--font-mono); font-size: 0.65rem; color: var(--muted); border-bottom: 1px solid var(--border); }
+.freq-table td { padding: 5px 8px; border-bottom: 1px solid rgba(226,232,240,0.5); }
+.freq-bar-wrap { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+.freq-bar-fill { height: 100%; border-radius: 4px; background: var(--accent); }
+
+/* ── Range slider ── */
+input[type=range] {
+  -webkit-appearance: none;
+  width: 200px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  outline: none;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+}
+.range-val { font-family: var(--font-mono); font-size: 0.75rem; color: var(--accent); }
+
+/* ── Login overlay ── */
+#login-overlay {
+  position: fixed; inset: 0;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #0a2a1e 100%);
+  z-index: 99999;
+  display: flex; align-items: center; justify-content: center;
+}
+.login-box {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(10,138,106,0.35);
+  border-radius: 20px;
+  padding: 3rem 2.5rem;
+  width: min(420px, 90vw);
+  text-align: center;
+  box-shadow: 0 30px 80px rgba(0,0,0,0.5), 0 0 60px rgba(10,138,106,0.08);
+  backdrop-filter: blur(8px);
+}
+.login-logo {
+  font-family: var(--font-mono);
+  font-size: 1.4rem;
+  color: var(--accent);
+  letter-spacing: 3px;
+  margin-bottom: 0.4rem;
+}
+.login-sub {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: rgba(100,116,139,0.8);
+  letter-spacing: 2px;
+  margin-bottom: 2rem;
+}
+.login-label {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: rgba(100,116,139,0.9);
+  letter-spacing: 1px;
+  margin-bottom: 0.75rem;
+  display: block;
+}
+#login-input {
+  width: 100%;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(10,138,106,0.4);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  color: #f1f5f9;
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  letter-spacing: 3px;
+  outline: none;
+  text-align: center;
+  transition: border-color 0.2s;
+  margin-bottom: 1rem;
+}
+#login-input:focus { border-color: var(--accent); }
+#login-btn {
+  width: 100%;
+  background: var(--accent);
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  letter-spacing: 2px;
+  padding: 0.75rem;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+#login-btn:hover { opacity: 0.88; }
+#login-error {
+  margin-top: 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: #f87171;
+  min-height: 1.2rem;
+}
+
+/* ── Synthesis Candidates Tab ── */
+.cand-section { margin-bottom: 2rem; }
+.cand-section-header {
+  display: flex; align-items: center; gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.cand-badge {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  padding: 3px 10px;
+  border-radius: 20px;
+  letter-spacing: 1px;
+}
+.cand-badge-high { background: rgba(22,163,74,0.15); color: #16a34a; border: 1px solid rgba(22,163,74,0.35); }
+.cand-badge-low  { background: rgba(220,38,38,0.12); color: #dc2626; border: 1px solid rgba(220,38,38,0.3); }
+.cand-table-wrap {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: auto;
+}
+.cand-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.cand-table thead th {
+  background: var(--panel);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 1px;
+  padding: 0.7rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.cand-table thead th[data-col] {
+  cursor: pointer;
+  user-select: none;
+}
+.cand-table thead th[data-col]:hover { color: var(--accent); background: rgba(0,229,180,0.06); }
+.cand-table thead th[data-col].sort-asc::after  { content: ' ▲'; color: var(--accent); }
+.cand-table thead th[data-col].sort-desc::after { content: ' ▼'; color: var(--accent); }
+.cand-table tbody tr {
+  border-bottom: 1px solid rgba(226,232,240,0.6);
+  transition: background 0.15s;
+}
+.cand-table tbody tr:hover { background: rgba(0,229,180,0.04); }
+.cand-table tbody td { padding: 0.65rem 1rem; vertical-align: middle; }
+.cand-rank {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--muted);
+}
+.pca-plot-wrap {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 2rem;
+}
+.pca-plot-wrap h3 {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #475569;
+  margin-bottom: 1rem;
+}
+.pca-chart-wrap { position: relative; height: 320px; }
+.synth-info-box {
+  background: rgba(10,138,106,0.05);
+  border: 1px solid rgba(10,138,106,0.2);
+  border-radius: 10px;
+  padding: 0.9rem 1.2rem;
+  margin-bottom: 1.5rem;
+  font-size: 0.78rem;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.synth-info-box strong { color: var(--accent); }
+
+/* ── Loading ── */
+#loading {
+  position: fixed; inset: 0;
+  background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column; gap: 1rem;
+  z-index: 9999;
+}
+.spinner {
+  width: 40px; height: 40px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.load-text { font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); }
+
+@media (max-width: 768px) {
+  .chart-grid { grid-template-columns: 1fr; }
+  .meta-grid { grid-template-columns: 1fr; }
+  .stats-row { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════ LOGIN OVERLAY ══════════════════ -->
+<div id="login-overlay">
+  <div class="login-box">
+    <div class="login-logo">⬡ PolymerChem</div>
+    <div class="login-sub">ML DASHBOARD · RESTRICTED ACCESS</div>
+    <label class="login-label" for="login-input">ENTER ACCESS PASSWORD</label>
+    <input id="login-input" type="password" autocomplete="off" placeholder="••••••••"
+      onkeydown="if(event.key==='Enter')checkPassword()">
+    <button id="login-btn" onclick="checkPassword()">UNLOCK DASHBOARD</button>
+    <div id="login-error"></div>
+  </div>
+</div>
+
+<!-- ══════════════════ FULLSCREEN OLIGOMER POPUP ══════════════════ -->
+<div id="oligo-popup-overlay" onclick="closeOligoPopup(event)">
+  <div id="oligo-popup">
+    <div class="popup-header">
+      <div class="popup-title" id="popup-title">Oligomer Detail</div>
+      <button class="popup-save-btn" id="popup-save-png" onclick="savePopupPng()">⬇ Save PNG</button>
+      <button class="popup-save-btn svg-btn" onclick="savePopupSvg()">⬇ Save SVG</button>
+      <button class="popup-close" onclick="document.getElementById('oligo-popup-overlay').classList.remove('open')">✕</button>
+    </div>
+    <div class="popup-body" id="popup-body"></div>
+  </div>
+</div>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <div class="load-text">Loading molecular data...</div>
+</div>
+
+<div id="tooltip"></div>
+<div id="oligo-tooltip"></div>
+
+<header>
+  <div class="logo">⬡ PolymerChem</div>
+  <span class="pill">ML Dashboard</span>
+  <div class="subtitle" id="header-stats">—</div>
+</header>
+
+<nav>
+  <button class="active" onclick="switchTab('monomers',this)">Monomers</button>
+  <button onclick="switchTab('metadynamics',this)">Metadynamics FES</button>
+  <button onclick="switchTab('oligomers',this)">Oligomer Library</button>
+  <button onclick="switchTab('analytics',this)">Analytics</button>
+  <button onclick="switchTab('synthesis',this)">Synthesis Candidates</button>
+</nav>
+
+<!-- ══════════════════ MONOMERS ══════════════════ -->
+<div class="section active" id="tab-monomers">
+  <div class="section-title">Monomer Library</div>
+  <div id="monomer-search" style="margin-bottom:1rem">
+    <input id="msearch" type="text" placeholder="Search monomer ID or SMILES…"
+      style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:0.5rem 1rem;color:var(--text);font-family:var(--font-body);font-size:0.85rem;width:300px;outline:none;"
+      oninput="filterMonomers(this.value)">
+  </div>
+  <div class="monomer-grid" id="monomer-grid"></div>
+</div>
+
+<!-- ══════════════════ METADYNAMICS ══════════════════ -->
+<div class="section" id="tab-metadynamics">
+  <div class="section-title">Free Energy Surface (Metadynamics)</div>
+
+  <!-- <div style="background:rgba(255,209,102,0.07);border:1px solid rgba(255,209,102,0.25);border-radius:10px;padding:0.9rem 1.2rem;margin-bottom:1.25rem;font-size:0.78rem;line-height:1.7">
+    <span style="color:var(--accent4);font-family:var(--font-mono);font-weight:700">💡 Serving tip</span> &nbsp;—&nbsp;
+    SVG paths in <code style="color:var(--accent)">FILE_PATHS.metadynamics</code> are relative to where you run the server from.<br>
+    Run from the <strong>parent</strong> of <code>Visual/</code> so all data is reachable:
+    <code style="display:inline-block;background:#1e293b;padding:3px 10px;border-radius:5px;color:var(--accent);margin-top:4px">
+      cd ~/Scratch_Falcon/Metadynamics_Oligomers &nbsp;&amp;&amp;&nbsp; python3 -m http.server 8080
+    </code>
+    &nbsp; then open &nbsp;
+    <code style="color:var(--accent2)">http://localhost:8080/Visual/chem_dashboard.html</code><br>
+    Then set paths like <code style="color:var(--accent)">"A3413": "A3413/Metadynamics/Analysis/FES_2D_normalized.svg"</code>
+    &nbsp;—&nbsp; or just use the <strong style="color:var(--accent)">Browse</strong> button if a path fails.
+  </div> -->
+
+  <div class="meta-grid">
+    <div>
+      <div style="font-size:0.75rem;color:var(--muted);margin-bottom:0.75rem;font-family:var(--font-mono);">SELECT MONOMER</div>
+      <div class="meta-list" id="meta-list"></div>
+    </div>
+    <div class="meta-right-panel">
+      <div class="fes-top-row">
+        <div class="fes-container" id="fes-display" style="flex:1">
+          <div class="fes-placeholder">← Select a monomer to view its FES plot</div>
+        </div>
+        <div class="fes-props-panel" id="fes-props-panel"></div>
+      </div>
+      <div class="fes-freq-panel" id="fes-freq-panel">
+        <h4>Monomer Occurrence in Oligomer Library</h4>
+        <div id="fes-freq-content"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ OLIGOMERS ══════════════════ -->
+<div class="section" id="tab-oligomers">
+  <div class="section-title">Oligomer Composition Library</div>
+
+  <div style="margin-bottom:1rem;display:flex;align-items:center;gap:1rem">
+    <span class="filter-label">DATA FILE:</span>
+    <select id="oligo-file-select" onchange="switchOligoFile(this.value)" style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:0.4rem 0.75rem;font-family:var(--font-mono);font-size:0.8rem;color:var(--text);cursor:pointer">
+    </select>
+  </div>
+
+  <div class="filter-bar">
+    <div class="filter-group">
+      <button class="filter-btn active" id="fb-all" onclick="setFluorFilter('all',this)">All</button>
+      <button class="filter-btn" id="fb-high" onclick="setFluorFilter('high',this)">High</button>
+      <button class="filter-btn" id="fb-med"  onclick="setFluorFilter('med',this)">Medium</button>
+      <button class="filter-btn" id="fb-low"  onclick="setFluorFilter('low',this)">Low</button>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">MAX MONOMERS:</span>
+      <input type="range" id="mono-slider" min="1" max="28" value="28" oninput="setMaxMonomers(this.value)">
+      <span class="range-val" id="mono-val">28</span>
+    </div>
+  </div>
+
+  <div class="stats-row" id="stats-row"></div>
+  <div class="oligo-table-wrap">
+    <table>
+      <thead id="oligo-thead"></thead>
+      <tbody id="oligo-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════════════ ANALYTICS ══════════════════ -->
+<div class="section" id="tab-analytics">
+  <div class="section-title">Analytics &amp; Distributions</div>
+
+  <!-- Data file selection -->
+  <div style="margin-bottom:1rem;display:flex;align-items:center;gap:1rem">
+    <span class="filter-label">DATA FILE:</span>
+    <select id="analytics-file-select" onchange="switchAnalyticsFile(this.value)" style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:0.4rem 0.75rem;font-family:var(--font-mono);font-size:0.8rem;color:var(--text);cursor:pointer">
+    </select>
+  </div>
+
+  <!-- Analytics filter bar -->
+  <div class="analytics-filter-bar">
+    <span class="filter-label">FILTERS:</span>
+
+    <div class="filter-group">
+      <button class="filter-btn active" id="afc-all"  onclick="setAnalyticsClass('all',this)">All</button>
+      <button class="filter-btn" id="afc-0"   onclick="setAnalyticsClass('0',this)">Low</button>
+      <button class="filter-btn" id="afc-1"   onclick="setAnalyticsClass('1',this)">Medium</button>
+      <button class="filter-btn" id="afc-2"   onclick="setAnalyticsClass('2',this)">High</button>
+    </div>
+
+    <div class="filter-group">
+      <span class="filter-label">MAX MONOMERS:</span>
+      <input type="range" id="a-mono-slider" min="1" max="28" value="28" oninput="setAnalyticsMaxMono(this.value)">
+      <span class="range-val" id="a-mono-val">28</span>
+    </div>
+
+    <div class="filter-group">
+      <span class="filter-label">logP RANGE:</span>
+      <span class="logp-range-val" id="logp-min-lbl">−∞</span>
+      <input type="range" id="logp-min-slider" min="-10" max="10" value="-10" step="0.5" oninput="setLogpRange()">
+      <span class="filter-label">to</span>
+      <input type="range" id="logp-max-slider" min="-10" max="10" value="10" step="0.5" oninput="setLogpRange()">
+      <span class="logp-range-val" id="logp-max-lbl">+∞</span>
+    </div>
+
+    <!-- Monomer color legend -->
+    <div class="mono-legend" style="margin-left:auto">
+      <span><span class="legend-dot" style="background:#16a34a"></span>Positive</span>
+      <span><span class="legend-dot" style="background:#dc2626"></span>Negative</span>
+      <span><span class="legend-dot" style="background:#d97706"></span>Hydrophobic</span>
+      <span><span class="legend-dot" style="background:#2563eb"></span>Neutral</span>
+    </div>
+  </div>
+
+  <div class="chart-grid" id="analytics-chart-grid">
+    <div class="chart-card">
+      <h3>Fluorescence Score Distribution</h3>
+      <div class="chart-wrap"><canvas id="chart-fluor"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>Docking Score Distribution</h3>
+      <div class="chart-wrap"><canvas id="chart-dock"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3 style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem">
+        Property by Class
+        <select id="violin-prop-select" onchange="buildViolinChart()" style="font-size:0.7rem;padding:2px 8px;border:1px solid var(--border);border-radius:4px;background:var(--card);color:var(--text);font-family:var(--font-mono);cursor:pointer">
+          <option value="predicted_docking_score">Docking Score</option>
+          <option value="avgLogP">Avg logP</option>
+          <option value="meanTPSA">Mean TPSA (Å²)</option>
+          <option value="totalMW">Total MW (Da)</option>
+          <option value="DP">Degree of Polymerization</option>
+          <option value="score">Fluorescence Score</option>
+        </select>
+      </h3>
+      <div style="overflow:hidden">
+        <svg id="violin-svg" width="100%" viewBox="0 0 480 240" preserveAspectRatio="xMidYMid meet" style="display:block"></svg>
+        <div id="violin-stats" style="display:flex;gap:1.5rem;justify-content:center;padding:0.4rem 0 0.2rem;font-family:var(--font-mono);font-size:0.68rem"></div>
+      </div>
+    </div>
+    <div class="chart-card">
+      <h3>Top Monomers by Frequency <span id="mono-freq-legend" style="font-weight:normal;font-size:0.6rem;color:var(--muted)"></span></h3>
+      <div class="chart-wrap"><canvas id="chart-mono-freq"></canvas></div>
+    </div>
+
+    <!-- K-Means clustering -->
+    <div class="kmeans-card" style="grid-column:1/-1">
+      <h3>K-Means Clustering
+        <span style="font-weight:normal;font-size:0.65rem;color:var(--muted);margin-left:1rem">
+          Axes:
+          <select id="km-x-axis" onchange="rebuildKmeans()" style="font-size:0.7rem;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:var(--card);color:var(--text);font-family:var(--font-mono)">
+            <option value="predicted_docking_score">Docking Score</option>
+            <option value="avgLogP">Avg logP</option>
+            <option value="meanTPSA">Mean TPSA (Å²)</option>
+            <option value="totalMW">Total MW (Da)</option>
+            <option value="DP">DP</option>
+            <option value="score">Fluorescence Score</option>
+          </select>
+          vs
+          <select id="km-y-axis" onchange="rebuildKmeans()" style="font-size:0.7rem;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:var(--card);color:var(--text);font-family:var(--font-mono)">
+            <option value="avgLogP">Avg logP</option>
+            <option value="predicted_docking_score">Docking Score</option>
+            <option value="meanTPSA">Mean TPSA (Å²)</option>
+            <option value="totalMW">Total MW (Da)</option>
+            <option value="DP">DP</option>
+            <option value="score">Fluorescence Score</option>
+          </select>
+          &nbsp; K=
+          <select id="km-k" onchange="rebuildKmeans()" style="font-size:0.7rem;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:var(--card);color:var(--text);font-family:var(--font-mono)">
+            <option>2</option><option selected>3</option><option>4</option><option>5</option>
+          </select>
+          &nbsp; Color by:
+          <select id="km-color-by" onchange="rebuildKmeans()" style="font-size:0.7rem;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:var(--card);color:var(--text);font-family:var(--font-mono)">
+            <option value="cluster">Cluster</option>
+            <option value="fluorescence">Fluorescence</option>
+            <option value="class">Consensus Class</option>
+          </select>
+        </span>
+      </h3>
+      <div style="display:grid;grid-template-columns:1fr auto;gap:1rem;align-items:start">
+        <div style="position:relative;height:320px"><canvas id="chart-kmeans"></canvas></div>
+        <div id="cluster-legend" class="cluster-legend" style="flex-direction:column;min-width:140px"></div>
+      </div>
+    </div>
+
+    <!-- Pair plot -->
+    <div class="pairplot-card">
+      <h3>Pair Plot
+        <span style="font-weight:normal;font-size:0.65rem;color:var(--muted);margin-left:1rem">Score · Docking · DP (color = Consensus Class)</span>
+      </h3>
+      <div id="pairplot-container" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ SYNTHESIS CANDIDATES ══════════════════ -->
+<div class="section" id="tab-synthesis">
+  <div class="section-title">Synthesis Candidates</div>
+
+  <!-- Data file selector -->
+  <div style="margin-bottom:1rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+    <span class="filter-label">DATA FILE:</span>
+    <select id="synth-file-select" onchange="buildSynthesisCandidates()"
+      style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:0.4rem 0.75rem;font-family:var(--font-mono);font-size:0.8rem;color:var(--text);cursor:pointer">
+    </select>
+    <span class="filter-label">PCA FEATURES:</span>
+    <span style="font-size:0.72rem;color:var(--muted);font-family:var(--font-mono)">Docking · logP · TPSA · MW · DP</span>
+    <span class="filter-label" style="margin-left:0.5rem">CLUSTERS (K):</span>
+    <select id="synth-k" onchange="buildSynthesisCandidates()"
+      style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:0.3rem 0.6rem;font-family:var(--font-mono);font-size:0.8rem;color:var(--text);cursor:pointer">
+      <option value="5" selected>5</option>
+      <option value="7">7</option>
+      <option value="10">10</option>
+    </select>
+  </div>
+
+  <div class="synth-info-box">
+    <strong>Selection Method:</strong> PCA on 5 molecular features (docking score, avg logP, mean TPSA, total MW, degree of polymerization) → K-Means clustering → one <strong>best</strong> candidate per cluster for High list (most negative docking score) and one <strong>worst</strong> candidate per cluster for Low list (least negative score). Ensures chemical diversity across clusters.
+  </div>
+
+  <!-- PCA scatter plot -->
+  <div class="pca-plot-wrap">
+    <h3>PCA Chemical Space · Clusters &amp; Selected Candidates</h3>
+    <div class="pca-chart-wrap"><canvas id="chart-pca-synth"></canvas></div>
+    <div id="pca-cluster-legend" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:0.75rem"></div>
+  </div>
+
+  <!-- High candidates -->
+  <div class="cand-section">
+    <div class="cand-section-header">
+      <span class="cand-badge cand-badge-high">▲ HIGH CANDIDATES</span>
+      <span style="font-size:0.78rem;color:var(--muted)">Best docking score (most negative) — one from each diverse cluster</span>
+    </div>
+    <div class="cand-table-wrap">
+      <table class="cand-table">
+        <thead>
+          <tr>
+            <th>#</th><th>Composition</th>
+            <th data-col="DP"                      data-label="DP"            onclick="sortSynthTable('synth-high-tbody','DP')">DP</th>
+            <th data-col="predicted_docking_score" data-label="Docking Score" onclick="sortSynthTable('synth-high-tbody','predicted_docking_score')">Docking Score</th>
+            <th data-col="fluorescence"            data-label="Fluorescence"  onclick="sortSynthTable('synth-high-tbody','fluorescence')">Fluorescence</th>
+            <th data-col="avgLogP"                 data-label="Avg logP"      onclick="sortSynthTable('synth-high-tbody','avgLogP')">Avg logP</th>
+            <th data-col="meanTPSA"                data-label="Mean TPSA"     onclick="sortSynthTable('synth-high-tbody','meanTPSA')">Mean TPSA</th>
+            <th data-col="totalMW"                 data-label="Total MW"      onclick="sortSynthTable('synth-high-tbody','totalMW')">Total MW</th>
+            <th data-col="_clusterIdx"             data-label="Cluster"       onclick="sortSynthTable('synth-high-tbody','_clusterIdx')">Cluster</th>
+          </tr>
+        </thead>
+        <tbody id="synth-high-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Low candidates -->
+  <div class="cand-section">
+    <div class="cand-section-header">
+      <span class="cand-badge cand-badge-low">▼ LOW CANDIDATES</span>
+      <span style="font-size:0.78rem;color:var(--muted)">Weakest docking score (least negative) — one from each diverse cluster</span>
+    </div>
+    <div class="cand-table-wrap">
+      <table class="cand-table">
+        <thead>
+          <tr>
+            <th>#</th><th>Composition</th>
+            <th data-col="DP"                      data-label="DP"            onclick="sortSynthTable('synth-low-tbody','DP')">DP</th>
+            <th data-col="predicted_docking_score" data-label="Docking Score" onclick="sortSynthTable('synth-low-tbody','predicted_docking_score')">Docking Score</th>
+            <th data-col="fluorescence"            data-label="Fluorescence"  onclick="sortSynthTable('synth-low-tbody','fluorescence')">Fluorescence</th>
+            <th data-col="avgLogP"                 data-label="Avg logP"      onclick="sortSynthTable('synth-low-tbody','avgLogP')">Avg logP</th>
+            <th data-col="meanTPSA"                data-label="Mean TPSA"     onclick="sortSynthTable('synth-low-tbody','meanTPSA')">Mean TPSA</th>
+            <th data-col="totalMW"                 data-label="Total MW"      onclick="sortSynthTable('synth-low-tbody','totalMW')">Total MW</th>
+            <th data-col="_clusterIdx"             data-label="Cluster"       onclick="sortSynthTable('synth-low-tbody','_clusterIdx')">Cluster</th>
+          </tr>
+        </thead>
+        <tbody id="synth-low-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+let SMILES = {}, FEATURES = {}, OLIGOMERS = [];
+let oligomerFileData = {};  // Store data for each file: { "fileName": [...rows], ... }
+let currentOligoFile = 'merged';  // Track currently displayed file ('merged' or file index)
+let flourFilter = 'all', classFilter = 'all', maxMonomers = 28;
+let sortCol = 'predicted_docking_score', sortDir = 1;
+let chartsBuilt = false;
+let analyticsClass = 'all', analyticsMaxMono = 28, logpMin = -10, logpMax = 10;
+let chartFluor, chartDock, chartMonoFreq, chartKmeans;
+
+// ── Tab switching ──────────────────────────────────────────────────────
+function switchTab(id, btn) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  btn.classList.add('active');
+  if (id === 'analytics' && !chartsBuilt) {
+    buildCharts();
+    rebuildKmeans();
+    buildPairPlot();
+  }
+  if (id === 'synthesis') {
+    buildSynthesisCandidates();
+  }
+}
+
+// ── Load all data ──────────────────────────────────────────────────────
+async function loadAll() {
+  try {
+    const [smilesResp, featResp] = await Promise.all([
+      fetch(FILE_PATHS.monomerSmiles),
+      fetch(FILE_PATHS.monomerFeatures)
+    ]);
+    SMILES = await smilesResp.json();
+    FEATURES = await featResp.json();
+
+    // Load all oligomer CSV files and store them separately
+    const filePromises = FILE_PATHS.oligomerFiles.map((fileInfo, idx) => 
+      new Promise((resolve, reject) => {
+        // Cache-buster ensures browser always fetches the latest CSV
+        const cacheBustedPath = fileInfo.path + '?v=' + (fileInfo.version || '1');
+        Papa.parse(cacheBustedPath, {
+          download: true,
+          header: false,
+          skipEmptyLines: true,
+          complete: res => {
+            const rows = res.data;
+            if (rows.length < 2) { resolve(); return; }
+            
+            const headers = rows[0].map(h => h.trim());
+            const dpIdx = headers.indexOf('DP');
+            const hasFluor = headers.indexOf('fluorescence') !== -1;
+            const scoreIdx = headers.indexOf('score');
+            
+            const dataRows = rows.slice(1).filter(r => r[dpIdx] !== undefined && r[dpIdx] !== '' && r[dpIdx] !== 'DP');
+            
+            // Map to objects with correct column alignment
+            const filtered = dataRows.map(row => {
+              const obj = {};
+              headers.forEach((h, i) => {
+                let val = row[i];
+                if (typeof val === 'string' && val !== '' && !isNaN(val) && h !== 'fluorescence') {
+                  val = parseFloat(val);
+                }
+                obj[h] = val;
+              });
+              // Fallback: derive fluorescence from score if column is missing
+              if (!hasFluor && scoreIdx !== -1) {
+                const s = parseFloat(row[scoreIdx]);
+                obj.fluorescence = s === 0 ? 'High' : s <= 4 ? 'Medium' : 'Low';
+              }
+              // Normalize fluorescence to be consistent with Consensus_Class
+              // (some CSVs have inverted fluorescence strings relative to class)
+              const cc = parseInt(obj['Consensus_Class']);
+              if (!isNaN(cc)) {
+                obj.fluorescence = cc === 2 ? 'High' : cc === 1 ? 'Medium' : 'Low';
+              }
+              // Pre-compute chemistry properties for sorting and display
+              const dp = parseFloat(obj['DP']) || 1;
+              const monoEntries = headers.slice(0, dpIdx)
+                .map(h => ({ id: h, cnt: parseFloat(obj[h] || 0) }))
+                .filter(e => e.cnt > 0);
+              const wMean = (prop) => monoEntries.reduce((s, e) => s + e.cnt * (FEATURES[e.id]?.[prop] ?? 0), 0) / dp;
+              obj.avgLogP  = wMean('logp');
+              obj.meanTPSA = wMean('tpsa');
+              obj.totalMW  = monoEntries.reduce((s, e) => s + e.cnt * (FEATURES[e.id]?.mw ?? 0), 0);
+              const meanLP = obj.avgLogP;
+              obj.sdLogP   = Math.sqrt(monoEntries.reduce((s, e) => s + e.cnt * ((FEATURES[e.id]?.logp ?? 0) - meanLP) ** 2, 0) / dp);
+              return obj;
+            });
+            
+            console.log(`[${fileInfo.name}] Parsed ${filtered.length} rows, ${headers.length} columns, hasFluor=${hasFluor}`);
+            
+            oligomerFileData[fileInfo.name] = filtered;
+            resolve();
+          },
+          error: reject
+        });
+      })
+    );
+    
+    await Promise.all(filePromises);
+    
+    // Create merged dataset
+    const allOligomers = [];
+    Object.values(oligomerFileData).forEach(fileData => {
+      allOligomers.push(...fileData);
+    });
+    oligomerFileData['Merged (All Files)'] = allOligomers;
+    OLIGOMERS = allOligomers;
+    
+    console.log('Loaded oligomer files:');
+    FILE_PATHS.oligomerFiles.forEach(f => {
+      console.log(`  ${f.name}: ${oligomerFileData[f.name]?.length || 0} rows`);
+    });
+    console.log(`  Merged (All Files): ${OLIGOMERS.length} rows total`);
+    
+    // Populate file dropdown
+    populateFileDropdown();
+    
+    buildMonomers();
+    buildMeta();
+    buildOligomers();
+    buildAnalyticsDropdown();
+    document.getElementById('header-stats').textContent =
+      `${Object.keys(SMILES).length} monomers · ${OLIGOMERS.length} oligomers (from ${FILE_PATHS.oligomerFiles.length} file${FILE_PATHS.oligomerFiles.length !== 1 ? 's' : ''})`;
+    document.getElementById('loading').style.display = 'none';
+  } catch(e) {
+    const isFileProtocol = location.protocol === 'file:';
+    document.getElementById('loading').innerHTML = `
+      <div style="max-width:520px;text-align:center;padding:2rem">
+        <div style="font-size:2rem;margin-bottom:1rem">⚠</div>
+        <div style="font-family:var(--font-mono);font-size:0.85rem;color:var(--accent);margin-bottom:1rem">Failed to load data files</div>
+        ${isFileProtocol ? `
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem;margin-bottom:1rem;text-align:left;font-size:0.8rem;color:var(--text)">
+          <div style="color:var(--accent4);font-family:var(--font-mono);margin-bottom:0.5rem">💡 Opened via file:// — browsers block local file loading.</div>
+          Serve with a local HTTP server:<br><br>
+          <code style="background:#1e293b;padding:6px 10px;border-radius:6px;color:var(--accent);display:block;font-size:0.75rem">
+            cd ~/Scratch_Falcon/Metadynamics_Oligomers<br>
+            python3 -m http.server 8080
+          </code><br>
+          Then open: <a href="http://localhost:8080/Visual/chem_dashboard.html" style="color:var(--accent2)">http://localhost:8080/chem_dashboard.html</a>
+        </div>` : ''}
+        <div style="font-size:0.75rem;color:var(--muted);font-family:var(--font-mono)">${e.message}</div>
+      </div>`;
+  }
+}
+
+// ── Monomer section ────────────────────────────────────────────────────
+function buildMonomers() {
+  const grid = document.getElementById('monomer-grid');
+  grid.innerHTML = '';
+  Object.keys(SMILES).forEach(id => {
+    const smiles = SMILES[id];
+    const feat = FEATURES[id] || {};
+    const charge = feat.charge ?? 0;
+    const chargeCls = charge > 0 ? 'charge-pos' : charge < 0 ? 'charge-neg' : 'charge-neu';
+    const chargeLabel = charge > 0 ? '+' + charge : charge === 0 ? 'neutral' : charge;
+    const hasFES = !!FILE_PATHS.metadynamics[id];
+    const isHydro = (feat.logp ?? 0) > 2;
+
+    const cardChargeCls = charge > 0 ? 'card-pos' : charge < 0 ? 'card-neg' : isHydro ? 'card-hydro' : 'card-neu';
+    const card = document.createElement('div');
+    card.className = `monomer-card ${cardChargeCls}`;
+    card.dataset.id = id;
+    card.innerHTML = `
+      <div class="monomer-id">${id}</div>
+      <span class="charge-badge ${chargeCls}">${chargeLabel}</span>
+      ${isHydro ? '<span class="charge-badge charge-hydro" style="margin-left:4px">hydrophobic</span>' : ''}
+      ${hasFES ? '<span class="charge-badge" style="margin-left:4px;font-size:0.6rem;background:rgba(37,99,235,0.1);color:#1d4ed8;border:1px solid rgba(37,99,235,0.3)">FES ✓</span>' : ''}
+      <div class="monomer-smiles" title="${smiles}">${smiles}</div>
+      <div class="prop-row"><span>MW</span><span class="prop-val">${feat.mw ? feat.mw.toFixed(1) : '—'}</span></div>
+      <div class="prop-row"><span>logP</span><span class="prop-val">${feat.logp != null ? feat.logp.toFixed(2) : '—'}</span></div>
+      <div class="prop-row"><span>TPSA</span><span class="prop-val">${feat.tpsa != null ? feat.tpsa.toFixed(1) : '—'}</span></div>
+    `;
+    card.addEventListener('mouseenter', e => showTooltip(e, id));
+    card.addEventListener('mousemove', e => positionTooltip(e));
+    card.addEventListener('mouseleave', hideTooltip);
+    grid.appendChild(card);
+  });
+}
+
+function filterMonomers(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll('.monomer-card').forEach(c => {
+    const id = c.dataset.id.toLowerCase();
+    const sm = (SMILES[c.dataset.id] || '').toLowerCase();
+    c.style.display = (!q || id.includes(q) || sm.includes(q)) ? '' : 'none';
+  });
+}
+
+// ── Tooltip ────────────────────────────────────────────────────────────
+function showTooltip(e, id) {
+  const feat = FEATURES[id] || {};
+  const smiles = SMILES[id] || '';
+  const hasFES = !!FILE_PATHS.metadynamics[id];
+  const charge = feat.charge ?? 0;
+  const chargeCls = charge > 0 ? 'charge-pos' : charge < 0 ? 'charge-neg' : 'charge-neu';
+
+  const props = [
+    ['MW', feat.mw ? feat.mw.toFixed(2) + ' g/mol' : '—'],
+    ['logP', feat.logp != null ? feat.logp.toFixed(3) : '—'],
+    ['TPSA', feat.tpsa != null ? feat.tpsa.toFixed(2) + ' Å²' : '—'],
+    ['HBD', feat.hbd ?? '—'],
+    ['HBA', feat.hba ?? '—'],
+    ['Rot. Bonds', feat.rot_bonds ?? '—'],
+    ['Rings', feat.num_rings ?? '—'],
+    ['Arom. Rings', feat.arom_rings ?? '—'],
+    ['N atoms', feat.n_nitrogen ?? '—'],
+    ['O atoms', feat.n_oxygen ?? '—'],
+    ['C atoms', feat.n_carbon ?? '—'],
+    ['Heavy atoms', feat.heavy_atom_count ?? '—'],
+    ['BalabanJ', feat.balabanj != null ? feat.balabanj.toFixed(3) : '—'],
+    ['BertzCT', feat.bertzct != null ? feat.bertzct.toFixed(1) : '—'],
+  ];
+
+  const svgPath = FILE_PATHS.smilesSvgDir + '/' + id + '.svg';
+
+  const tt = document.getElementById('tooltip');
+  tt.innerHTML = `
+    <div class="tt-header">
+      <div class="tt-id">${id}</div>
+      <span class="charge-badge ${chargeCls}">${charge > 0 ? '+'+charge : charge}</span>
+      ${(FEATURES[id]?.logp??0)>2 ? '<span class="charge-badge charge-hydro">hydrophobic</span>' : ''}
+      ${hasFES ? '<span class="charge-badge" style="font-size:0.65rem;background:rgba(37,99,235,0.1);color:#1d4ed8;border:1px solid rgba(37,99,235,0.3)">FES ✓</span>' : ''}
+    </div>
+    <div style="text-align:center;margin-bottom:0.75rem">
+      <img src="${svgPath}" alt="${id} structure"
+        style="width:160px;height:120px;object-fit:contain;border-radius:8px;border:1px solid var(--border);background:#fff"
+        onerror="this.style.display='none'">
+    </div>
+    <div class="tt-smiles">${smiles}</div>
+    <div class="tt-props">
+      ${props.map(([k,v]) => `<div class="tt-prop"><span class="tt-pkey">${k}</span><span class="tt-pval">${v}</span></div>`).join('')}
+    </div>
+    ${hasFES ? `
+    <div class="tt-has-fes" style="display:flex;align-items:center;gap:0.5rem;flex-direction:column">
+      <div style="width:100%;text-align:left;margin-bottom:0.25rem">📊 METADYNAMICS FES</div>
+      <img src="${FILE_PATHS.metadynamics[id]}" alt="FES ${id}"
+        style="width:100%;max-height:180px;object-fit:contain;border-radius:7px;border:1px solid var(--border)"
+        onerror="this.parentElement.style.display='none'">
+    </div>` : ''}
+  `;
+  tt.style.display = 'block';
+  positionTooltip(e);
+}
+
+function positionTooltip(e) {
+  const tt = document.getElementById('tooltip');
+  const margin = 16;
+  let x = e.clientX + margin;
+  let y = e.clientY + margin;
+  if (x + 420 > window.innerWidth) x = e.clientX - 420 - margin;
+  if (y + tt.offsetHeight > window.innerHeight) y = e.clientY - tt.offsetHeight - margin;
+  tt.style.left = x + 'px';
+  tt.style.top = y + 'px';
+}
+
+function hideTooltip() {
+  document.getElementById('tooltip').style.display = 'none';
+}
+
+// ── Metadynamics section ───────────────────────────────────────────────
+function buildMeta() {
+  const list = document.getElementById('meta-list');
+  list.innerHTML = '';
+  const ids = Object.keys(FILE_PATHS.metadynamics);
+  if (!ids.length) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:0.8rem;font-family:var(--font-mono)">No FES files configured in FILE_PATHS.metadynamics</div>';
+    return;
+  }
+  ids.forEach((id, i) => {
+    const feat = FEATURES[id] || {};
+    const charge = feat.charge ?? 0;
+    const isHydro = (feat.logp ?? 0) > 2;
+    const dotColor = charge > 0 ? '#16a34a' : charge < 0 ? '#dc2626' : isHydro ? '#d97706' : '#2563eb';
+    const btn = document.createElement('button');
+    btn.className = 'meta-btn' + (i===0?' active':'');
+    btn.innerHTML = `<span class="dot" style="background:${dotColor}"></span>${id}`;
+    btn.onclick = () => {
+      document.querySelectorAll('.meta-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      loadFES(id);
+    };
+    list.appendChild(btn);
+  });
+  if (ids.length) loadFES(ids[0]);
+}
+
+function renderFesProps(id) {
+  const feat = FEATURES[id] || {};
+  const charge = feat.charge ?? 0;
+  const isHydro = (feat.logp ?? 0) > 2;
+  const chargeLabel = charge > 0 ? `+${charge} (positive)` : charge < 0 ? `${charge} (negative)` : isHydro ? '0 (hydrophobic)' : '0 (neutral)';
+  const chargeColor = charge > 0 ? '#16a34a' : charge < 0 ? '#dc2626' : isHydro ? '#d97706' : '#2563eb';
+  const panel = document.getElementById('fes-props-panel');
+  panel.style.display = 'block';
+  panel.innerHTML = `
+    <div style="font-family:var(--font-mono);font-size:0.65rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:0.75rem">Properties: ${id}</div>
+    <div class="fes-prop-row"><span class="fes-prop-key">Charge</span><span class="fes-prop-val" style="color:${chargeColor}">${chargeLabel}</span></div>
+    <div class="fes-prop-row"><span class="fes-prop-key">MW</span><span class="fes-prop-val">${feat.mw ? feat.mw.toFixed(1) + ' g/mol' : '—'}</span></div>
+    <div class="fes-prop-row"><span class="fes-prop-key">logP</span><span class="fes-prop-val">${feat.logp != null ? feat.logp.toFixed(3) : '—'}</span></div>
+    <div class="fes-prop-row"><span class="fes-prop-key">TPSA</span><span class="fes-prop-val">${feat.tpsa != null ? feat.tpsa.toFixed(2) + ' Å²' : '—'}</span></div>
+    <div class="fes-prop-row"><span class="fes-prop-key">HBD</span><span class="fes-prop-val">${feat.hbd ?? '—'}</span></div>
+    <div class="fes-prop-row"><span class="fes-prop-key">HBA</span><span class="fes-prop-val">${feat.hba ?? '—'}</span></div>
+    <div class="fes-prop-row"><span class="fes-prop-key">Rot. Bonds</span><span class="fes-prop-val">${feat.rot_bonds ?? '—'}</span></div>
+    <div class="fes-prop-row"><span class="fes-prop-key">Hydrophobic</span><span class="fes-prop-val" style="color:${isHydro?'#d97706':'var(--muted)'}">${isHydro ? '✓ Yes' : 'No'}</span></div>
+  `;
+}
+
+function renderFesFrequency(id) {
+  const cols = getMonomerCols();
+  const panel = document.getElementById('fes-freq-panel');
+  const content = document.getElementById('fes-freq-content');
+  panel.style.display = 'block';
+
+  // Count per class
+  const classCounts = { '0': 0, '1': 0, '2': 0 };
+  const classTotal  = { '0': 0, '1': 0, '2': 0 };
+  let totalAppear = 0, totalOligos = 0;
+
+  OLIGOMERS.forEach(row => {
+    if ((row[id] || 0) <= 0) return;
+    totalAppear++;
+    const cls = String(row['Consensus_Class']);
+    if (cls in classCounts) classCounts[cls]++;
+  });
+  Object.keys(classTotal).forEach(cls => {
+    classTotal[cls] = OLIGOMERS.filter(r => String(r['Consensus_Class']) === cls).length;
+  });
+  totalOligos = OLIGOMERS.length;
+
+  const freq = totalOligos ? ((totalAppear / totalOligos) * 100).toFixed(1) : 0;
+  const classLabels = { '0': 'Low', '1': 'Medium', '2': 'High' };
+  const classColors = { '0': '#dc2626', '1': '#d97706', '2': '#16a34a' };
+
+  const rows = Object.entries(classCounts).map(([cls, cnt]) => {
+    const pct = classTotal[cls] ? ((cnt / classTotal[cls]) * 100).toFixed(1) : 0;
+    const pctAll = totalOligos ? ((cnt / totalOligos) * 100).toFixed(1) : 0;
+    return `<tr>
+      <td><span style="color:${classColors[cls]};font-family:var(--font-mono);font-size:0.8rem;font-weight:700">${classLabels[cls]}</span></td>
+      <td style="font-family:var(--font-mono)">${cnt}</td>
+      <td style="font-family:var(--font-mono)">${pct}%</td>
+      <td style="width:100px"><div class="freq-bar-wrap"><div class="freq-bar-fill" style="width:${pct}%;background:${classColors[cls]}"></div></div></td>
+    </tr>`;
+  }).join('');
+
+  content.innerHTML = `
+    <div style="margin-bottom:0.75rem;font-size:0.8rem">
+      <span style="font-family:var(--font-mono);font-weight:700;color:var(--accent);font-size:1rem">${totalAppear}</span>
+      <span style="color:var(--muted);margin:0 0.4rem">appearances in</span>
+      <span style="font-family:var(--font-mono);font-weight:700;color:var(--text)">${totalOligos}</span>
+      <span style="color:var(--muted)"> oligomers</span>
+      <span style="font-family:var(--font-mono);background:rgba(10,138,106,0.1);color:var(--accent);border-radius:5px;padding:1px 8px;margin-left:0.5rem">${freq}% overall</span>
+    </div>
+    <table class="freq-table">
+      <thead><tr><th>Class</th><th>Count</th><th>% of Class</th><th>Frequency</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+function loadFES(id) {
+  const path = FILE_PATHS.metadynamics[id];
+  const display = document.getElementById('fes-display');
+  display.innerHTML = `
+    <div style="width:100%;text-align:center">
+      <img
+        src="${path}"
+        alt="FES for ${id}"
+        style="max-width:80%;max-height:360px;height:auto;border-radius:8px"
+        onerror="showFESError(this,'${id}','${path}')"
+      >
+      <div style="margin-top:0.75rem;font-size:0.7rem;color:var(--muted);font-family:var(--font-mono)">${path}</div>
+    </div>`;
+  renderFesProps(id);
+  renderFesFrequency(id);
+}
+
+function showFESError(imgEl, id, path) {
+  // <img> also failed (happens when opening html directly as file://
+  // from a different directory). Offer a manual file picker as fallback.
+  const display = document.getElementById('fes-display');
+  display.innerHTML = `
+    <div style="text-align:center">
+      <div class="fes-placeholder" style="margin-bottom:1rem">
+        ⚠ Could not load <code style="color:var(--accent)">${path}</code><br><br>
+        This usually happens when the HTML file is opened via <code>file://</code>
+        from a different directory, or via <code>python -m http.server</code>
+        with the HTML outside the data folder.<br><br>
+        <strong style="color:var(--text)">Quick fix:</strong> Browse to the SVG manually:
+      </div>
+      <label style="
+        display:inline-block;cursor:pointer;
+        background:rgba(0,229,180,0.1);border:1px solid var(--accent);
+        color:var(--accent);border-radius:8px;padding:0.5rem 1.2rem;
+        font-family:var(--font-mono);font-size:0.8rem;
+      ">
+        📂 Browse for ${id} FES file
+        <input type="file" accept=".svg,.png,.jpg,.pdf" style="display:none"
+          onchange="loadFESFromFile(event,'${id}')">
+      </label>
+      <div style="margin-top:1rem;font-size:0.7rem;color:var(--muted)">
+        Or update <code style="color:var(--accent2)">FILE_PATHS.metadynamics["${id}"]</code>
+        to a path reachable from the HTML file's location.
+      </div>
+    </div>`;
+}
+
+function loadFESFromFile(event, id) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const display = document.getElementById('fes-display');
+  const reader = new FileReader();
+  reader.onload = e => {
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (ext === 'svg') {
+      display.innerHTML = `<div style="width:100%">${e.target.result}</div>`;
+      const svg = display.querySelector('svg');
+      if (svg) { svg.style.width='100%'; svg.style.height='auto'; }
+    } else {
+      display.innerHTML = `<img src="${e.target.result}" style="max-width:100%;border-radius:8px">`;
+    }
+    display.innerHTML += `<div style="margin-top:0.5rem;font-size:0.7rem;color:var(--muted);font-family:var(--font-mono);text-align:center">${file.name}</div>`;
+  };
+  if (file.name.endsWith('.svg')) reader.readAsText(file);
+  else reader.readAsDataURL(file);
+}
+
+// ── Oligomer section ───────────────────────────────────────────────────
+// Figure out monomer columns (all before DP)
+let monomerCols = [];
+function getMonomerCols() {
+  if (monomerCols.length) return monomerCols;
+  if (!OLIGOMERS.length) return [];
+  const keys = Object.keys(OLIGOMERS[0]);
+  const dpIdx = keys.indexOf('DP');
+  monomerCols = dpIdx >= 0 ? keys.slice(0, dpIdx) : [];
+  return monomerCols;
+}
+
+function getFilteredOligomers() {
+  const cols = getMonomerCols();
+  
+  return OLIGOMERS.filter(row => {
+    // Get fluorescence value safely
+    let fluorRaw = row.fluorescence || row.Fluorescence || row['Fluorescence Score'] || '';
+    const fluor = String(fluorRaw).toLowerCase().trim();
+
+    // Count number of monomers
+    const numMono = cols.filter(c => parseFloat(row[c] || 0) > 0).length;
+
+    // Apply fluorescence filter
+    if (flourFilter === 'high' && fluor !== 'high') return false;
+    if (flourFilter === 'med'  && fluor !== 'medium') return false;
+    if (flourFilter === 'low'  && fluor !== 'low') return false;
+
+    // Max monomers filter
+    if (numMono > maxMonomers) return false;
+
+    return true;
+  });
+}
+
+function buildOligomers() {
+  renderStats();
+  renderTable();
+}
+
+function renderStats() {
+  const filtered = getFilteredOligomers();
+  const docking = filtered.map(r => parseFloat(r['predicted_docking_score'])).filter(v => !isNaN(v));
+  const fluorCounts = {};
+  filtered.forEach(r => { const f = r['fluorescence']; fluorCounts[f] = (fluorCounts[f] || 0) + 1; });
+  const avgDock = docking.length ? (docking.reduce((a,b)=>a+b,0)/docking.length).toFixed(3) : '—';
+  const bestDock = docking.length ? Math.min(...docking).toFixed(3) : '—';
+
+  document.getElementById('stats-row').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-num" style="color:var(--accent)">${filtered.length}</div>
+      <div class="stat-lbl">Oligomers shown</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" style="color:var(--accent2)">${avgDock}</div>
+      <div class="stat-lbl">Avg docking score</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" style="color:var(--accent4)">${bestDock}</div>
+      <div class="stat-lbl">Best docking score</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" style="color:var(--accent3)">${fluorCounts['High'] || 0}</div>
+      <div class="stat-lbl">High fluorescence</div>
+    </div>
+  `;
+}
+
+function renderTable() {
+  const cols = getMonomerCols();
+  const filtered = getFilteredOligomers();
+
+  // Sort
+  filtered.sort((a, b) => {
+    let av = a[sortCol], bv = b[sortCol];
+    if (typeof av === 'string') av = parseFloat(av) || av;
+    if (typeof bv === 'string') bv = parseFloat(bv) || bv;
+    return sortDir * (av < bv ? -1 : av > bv ? 1 : 0);
+  });
+
+  // Header
+  const thead = document.getElementById('oligo-thead');
+  const sortIcon = (col) => col === sortCol ? (sortDir===1 ? ' ▲' : ' ▼') : '';
+  thead.innerHTML = `<tr>
+    <th onclick="sortBy('#')">#${sortIcon('#')}</th>
+    <th onclick="sortBy('composition')">Composition${sortIcon('composition')}</th>
+    <th onclick="sortBy('DP')" class="${sortCol==='DP'?'sorted':''}">DP${sortIcon('DP')}</th>
+    <th onclick="sortBy('predicted_docking_score')" class="${sortCol==='predicted_docking_score'?'sorted':''}">Docking${sortIcon('predicted_docking_score')}</th>
+    <th onclick="sortBy('avgLogP')" class="${sortCol==='avgLogP'?'sorted':''}">Avg logP ±SD${sortIcon('avgLogP')}</th>
+    <th onclick="sortBy('meanTPSA')" class="${sortCol==='meanTPSA'?'sorted':''}">Mean TPSA${sortIcon('meanTPSA')}</th>
+    <th onclick="sortBy('totalMW')" class="${sortCol==='totalMW'?'sorted':''}">Total MW${sortIcon('totalMW')}</th>
+  </tr>`;
+
+  // Body (cap at 500 rows for performance)
+  const tbody = document.getElementById('oligo-tbody');
+  const display = filtered.slice(0, 500);
+  tbody.innerHTML = display.map((row, i) => {
+    const monoMap = cols.filter(c => (row[c]||0) > 0).map(c => ({ id: c, cnt: row[c] }));
+    const chips = monoMap.map(m => `<span class="mono-chip">${m.id}×${m.cnt}</span>`).join('');
+    const dock = parseFloat(row['predicted_docking_score']);
+    const dockColor = dock <= -8.78 ? 'var(--high)' : dock <= -8.7 ? 'var(--med)' : 'var(--low)';
+    const logpStr = `${row.avgLogP.toFixed(2)} ±${row.sdLogP.toFixed(2)}`;
+    return `<tr data-idx="${i}">
+      <td style="color:var(--muted);font-family:var(--font-mono)">${i+1}</td>
+      <td><div class="mono-chips">${chips}</div></td>
+      <td style="font-family:var(--font-mono)">${Math.round(row['DP'])}</td>
+      <td style="font-family:var(--font-mono);color:${dockColor}">${dock.toFixed(3)}</td>
+      <td style="font-family:var(--font-mono)">${logpStr}</td>
+      <td style="font-family:var(--font-mono)">${row.meanTPSA.toFixed(1)}</td>
+      <td style="font-family:var(--font-mono)">${row.totalMW.toFixed(1)}</td>
+    </tr>`;
+  }).join('');
+
+  if (filtered.length > 500) {
+    tbody.innerHTML += `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:1rem;font-size:0.75rem">
+      Showing 500 of ${filtered.length} results. Apply filters to narrow results.
+    </td></tr>`;
+  }
+
+  // Attach hover tooltip and click popup to each data row
+  tbody.querySelectorAll('tr[data-idx]').forEach(tr => {
+    const idx = parseInt(tr.dataset.idx);
+    const row = display[idx];
+    tr.addEventListener('mouseenter', e => showOligoTooltip(e, row));
+    tr.addEventListener('mousemove', e => posOligoTooltip(e));
+    tr.addEventListener('mouseleave', () => { document.getElementById('oligo-tooltip').style.display='none'; });
+    tr.addEventListener('click', () => { document.getElementById('oligo-tooltip').style.display='none'; openOligoPopup(row); });
+    tr.style.cursor = 'pointer';
+  });
+}
+
+function populateFileDropdown() {
+  const select = document.getElementById('oligo-file-select');
+  select.innerHTML = '';
+  
+  // Add individual files
+  FILE_PATHS.oligomerFiles.forEach(fileInfo => {
+    const opt = document.createElement('option');
+    opt.value = fileInfo.name;
+    opt.textContent = fileInfo.name;
+    select.appendChild(opt);
+  });
+  
+  // Add merged option
+  const optMerged = document.createElement('option');
+  optMerged.value = 'Merged (All Files)';
+  optMerged.textContent = '✓ Merged (All Files)';
+  optMerged.selected = true;
+  select.appendChild(optMerged);
+  select.value = 'Merged (All Files)';
+  
+  currentOligoFile = 'Merged (All Files)';
+}
+
+function buildAnalyticsDropdown() {
+  const select = document.getElementById('analytics-file-select');
+  if (!select) return;
+  
+  select.innerHTML = '';
+  
+  // Add individual files
+  FILE_PATHS.oligomerFiles.forEach(fileInfo => {
+    const opt = document.createElement('option');
+    opt.value = fileInfo.name;
+    opt.textContent = fileInfo.name;
+    select.appendChild(opt);
+  });
+  
+  // Add merged option
+  const optMerged = document.createElement('option');
+  optMerged.value = 'Merged (All Files)';
+  optMerged.textContent = '✓ Merged (All Files)';
+  optMerged.selected = true;
+  select.appendChild(optMerged);
+
+  // Also populate synthesis dropdown (individual files only — no merged)
+  const synthSelect = document.getElementById('synth-file-select');
+  if (synthSelect) {
+    synthSelect.innerHTML = '';
+    FILE_PATHS.oligomerFiles.forEach((fileInfo, idx) => {
+      const opt = document.createElement('option');
+      opt.value = fileInfo.name;
+      opt.textContent = fileInfo.name;
+      if (idx === 0) opt.selected = true;
+      synthSelect.appendChild(opt);
+    });
+  }
+}
+
+function switchOligoFile(fileName) {
+  console.log('Switching to file:', fileName);
+  console.log('Available files in oligomerFileData:', Object.keys(oligomerFileData));
+  console.log('Data for', fileName, ':', oligomerFileData[fileName]?.length, 'rows');
+  
+  if (!oligomerFileData[fileName]) {
+    console.warn('No data for file:', fileName);
+    return;
+  }
+
+  currentOligoFile = fileName;
+  
+  if (fileName === 'Merged (All Files)') {
+    OLIGOMERS = oligomerFileData['Merged (All Files)'];
+  } else {
+    OLIGOMERS = oligomerFileData[fileName];
+  }
+  
+   // Debug: Check first row's fluorescence
+   console.log('Sample fluorescence values:', OLIGOMERS.slice(0,5).map(r => r.fluorescence));
+   console.log('Unique fluorescence values:', [...new Set(OLIGOMERS.map(r => r.fluorescence))].sort());
+   
+   console.log('OLIGOMERS updated to:', OLIGOMERS?.length, 'rows');
+
+  // Reset all filters and sort
+  flourFilter = 'all';
+  sortCol = 'predicted_docking_score';
+  sortDir = 1;
+  maxMonomers = 28;
+  document.getElementById('mono-slider').value = 28;
+  document.getElementById('mono-val').textContent = 28;
+  document.getElementById('fb-all').classList.add('active');
+  document.getElementById('fb-high').classList.remove('active');
+  document.getElementById('fb-med').classList.remove('active');
+  document.getElementById('fb-low').classList.remove('active');
+  
+  // Rebuild oligomer display
+  buildOligomers();
+}
+
+function switchAnalyticsFile(fileName) {
+  if (fileName === 'Merged (All Files)') {
+    OLIGOMERS = oligomerFileData['Merged (All Files)'];
+  } else {
+    OLIGOMERS = oligomerFileData[fileName];
+  }
+  
+  // Destroy existing charts before rebuilding
+  [chartFluor, chartDock, chartMonoFreq, chartKmeans].forEach(c => { if(c) c.destroy(); });
+  buildCharts();
+  buildViolinChart();
+  rebuildKmeans();
+  buildPairPlot();
+}
+
+function setFluorFilter(val, btn) {
+  flourFilter = val;
+  console.log('setFluorFilter called:', val);
+  document.querySelectorAll('[id^="fb-"]').forEach(b => b.className = 'filter-btn');
+  const map = { high: 'active-high', med: 'active-med', low: 'active-low', all: 'active' };
+  btn.classList.add(map[val] || 'active');
+  
+  // Debug: show filtered count
+  const filtered = getFilteredOligomers();
+  console.log('Filtered oligomers count:', filtered.length, 'for filter:', val);
+  buildOligomers();
+}
+
+function setClassFilter(val, btn) {
+  classFilter = val;
+  document.querySelectorAll('[id^="fc-"]').forEach(b => b.className = 'filter-btn');
+  btn.classList.add('active');
+  buildOligomers();
+}
+
+function setMaxMonomers(val) {
+  maxMonomers = parseInt(val);
+  document.getElementById('mono-val').textContent = val;
+  buildOligomers();
+}
+
+function sortBy(col) {
+  if (sortCol === col) sortDir *= -1;
+  else { sortCol = col; sortDir = 1; }
+  renderTable();
+}
+
+// Analytics filter state
+
+function getAnalyticsOligomers() {
+  const cols = getMonomerCols();
+  return OLIGOMERS.filter(row => {
+    const cls = String(row['Consensus_Class']);
+    const numMono = cols.filter(c => (row[c]||0)>0).length;
+    if (analyticsClass !== 'all' && cls !== analyticsClass) return false;
+    if (numMono > analyticsMaxMono) return false;
+    // logP filter: filter oligomers whose monomers' avg logP is in range
+    const monoIds = cols.filter(c => (row[c]||0)>0);
+    if (monoIds.length) {
+      const avgLogp = monoIds.reduce((s,c) => s + (FEATURES[c]?.logp ?? 0), 0) / monoIds.length;
+      if (avgLogp < logpMin || avgLogp > logpMax) return false;
+    }
+    return true;
+  });
+}
+
+function setAnalyticsClass(val, btn) {
+  analyticsClass = val;
+  document.querySelectorAll('[id^="afc-"]').forEach(b => b.className = 'filter-btn');
+  btn.classList.add('active');
+  rebuildAllCharts();
+}
+function setAnalyticsMaxMono(val) {
+  analyticsMaxMono = parseInt(val);
+  document.getElementById('a-mono-val').textContent = val;
+  rebuildAllCharts();
+}
+function setLogpRange() {
+  logpMin = parseFloat(document.getElementById('logp-min-slider').value);
+  logpMax = parseFloat(document.getElementById('logp-max-slider').value);
+  if (logpMin > logpMax) { logpMax = logpMin; document.getElementById('logp-max-slider').value = logpMin; }
+  document.getElementById('logp-min-lbl').textContent = logpMin;
+  document.getElementById('logp-max-lbl').textContent = logpMax;
+  rebuildAllCharts();
+}
+
+function rebuildAllCharts() {
+  if (!chartsBuilt) return;
+  [chartFluor, chartDock, chartMonoFreq, chartKmeans].forEach(c => { if(c) c.destroy(); });
+  buildCharts();
+  buildViolinChart();
+  rebuildKmeans();
+  buildPairPlot();
+}
+
+// ── Analytics charts ───────────────────────────────────────────────────
+function buildCharts() {
+  chartsBuilt = true;
+  const data = getAnalyticsOligomers();
+  const scores  = data.map(r => r['fluorescence']);
+  const docking = data.map(r => r['predicted_docking_score']);
+  const cols = getMonomerCols();
+
+  // Fluorescence distribution
+  const scoreCounts = {};
+  scores.forEach(s => { scoreCounts[s] = (scoreCounts[s]||0)+1; });
+  const scoreKeys = Object.keys(scoreCounts).sort();
+  chartFluor = new Chart(document.getElementById('chart-fluor'), {
+    type: 'bar',
+    data: {
+      labels: scoreKeys,
+      datasets: [{
+        label: 'Count',
+        data: scoreKeys.map(k => scoreCounts[k]),
+        backgroundColor: scoreKeys.map(k => k==='High'?'rgba(22,163,74,0.75)':k==='Medium'?'rgba(217,119,6,0.65)':'rgba(220,38,38,0.65)'),
+        borderRadius: 4
+      }]
+    },
+    options: chartOptions('Fluorescence Score', 'Count')
+  });
+
+  // Docking distribution
+  const dockBins = 30;
+  const dMin = Math.min(...docking), dMax = Math.max(...docking);
+  const bw = (dMax-dMin)/dockBins;
+  const bins = Array.from({length:dockBins}, (_,i) => dMin + i*bw);
+  const binCounts = new Array(dockBins).fill(0);
+  docking.forEach(d => {
+    const bi = Math.min(dockBins-1, Math.floor((d-dMin)/bw));
+    binCounts[bi]++;
+  });
+  chartDock = new Chart(document.getElementById('chart-dock'), {
+    type: 'bar',
+    data: {
+      labels: bins.map(b => b.toFixed(2)),
+      datasets: [{
+        label: 'Count',
+        data: binCounts,
+        backgroundColor: 'rgba(37,99,235,0.55)',
+        borderRadius: 2
+      }]
+    },
+    options: chartOptions('Docking Score', 'Count')
+  });
+
+  // Violin chart — build with current dropdown selection
+  buildViolinChart();
+
+  // Monomer frequency — color by charge type
+  const freq = {};
+  data.forEach(row => {
+    cols.forEach(c => { if ((row[c]||0) > 0) freq[c] = (freq[c]||0)+1; });
+  });
+  const sortedFreq = Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,15);
+  const freqColors = sortedFreq.map(([id]) => {
+    const feat = FEATURES[id] || {};
+    const charge = feat.charge ?? 0;
+    const isHydro = (feat.logp ?? 0) > 2;
+    return charge > 0 ? 'rgba(22,163,74,0.7)' : charge < 0 ? 'rgba(220,38,38,0.65)' : isHydro ? 'rgba(217,119,6,0.65)' : 'rgba(37,99,235,0.6)';
+  });
+  chartMonoFreq = new Chart(document.getElementById('chart-mono-freq'), {
+    type: 'bar',
+    data: {
+      labels: sortedFreq.map(([id]) => id),
+      datasets: [{
+        label: 'Appearances',
+        data: sortedFreq.map(([,n]) => n),
+        backgroundColor: freqColors,
+        borderRadius: 5,
+        barThickness: 10,
+      }]
+    },
+    options: { ...chartOptions('Monomer', 'Appearances'), indexAxis: 'y',
+      plugins: { legend: { display: false }, tooltip: { callbacks: {
+        label: ctx => {
+          const id = sortedFreq[ctx.dataIndex]?.[0];
+          const feat = FEATURES[id] || {};
+          const charge = feat.charge ?? 0;
+          const isHydro = (feat.logp ?? 0) > 2;
+          const type = charge>0?'Positive':charge<0?'Negative':isHydro?'Hydrophobic':'Neutral';
+          return [`Count: ${ctx.parsed.x}`, `Type: ${type}`, `logP: ${feat.logp?.toFixed(2)??'—'}`];
+        }
+      }}}
+    }
+  });
+}
+
+// ── Violin plot ──────────────────────────────────────────────────────────
+function buildViolinChart() {
+  const svgEl = document.getElementById('violin-svg');
+  const statsEl = document.getElementById('violin-stats');
+  if (!svgEl || !OLIGOMERS.length) return;
+
+  const propKey = document.getElementById('violin-prop-select')?.value || 'predicted_docking_score';
+  const propLabel = { predicted_docking_score:'Docking Score', avgLogP:'Avg logP',
+    meanTPSA:'Mean TPSA (Å²)', totalMW:'Total MW (Da)', DP:'DP', score:'Fluorescence Score' }[propKey] || propKey;
+
+  // Use all data respecting maxMono + logP filters, but always show all 3 classes
+  const cols = getMonomerCols();
+  const allData = OLIGOMERS.filter(row => {
+    const numMono = cols.filter(c => parseFloat(row[c]||0) > 0).length;
+    if (numMono > analyticsMaxMono) return false;
+    const lp = row.avgLogP ?? 0;
+    if (lp < logpMin || lp > logpMax) return false;
+    return true;
+  });
+
+  const classes = [
+    { label:'High',   fluor:'High',   stroke:'#16a34a', fill:'rgba(22,163,74,0.30)' },
+    { label:'Medium', fluor:'Medium', stroke:'#d97706', fill:'rgba(217,119,6,0.30)' },
+    { label:'Low',    fluor:'Low',    stroke:'#dc2626', fill:'rgba(220,38,38,0.30)' },
+  ];
+
+  classes.forEach(cls => {
+    cls.values = allData.filter(r => r.fluorescence === cls.fluor)
+      .map(r => +r[propKey]).filter(v => isFinite(v));
+  });
+
+  function computeStats(vals) {
+    if (!vals.length) return null;
+    const n = vals.length;
+    const sorted = [...vals].sort((a, b) => a - b);
+    const mean = vals.reduce((s, v) => s + v, 0) / n;
+    const sd   = Math.sqrt(vals.reduce((s, v) => s + (v - mean) ** 2, 0) / n);
+    const med  = n % 2 === 0 ? (sorted[n/2-1] + sorted[n/2]) / 2 : sorted[Math.floor(n/2)];
+    return { mean, sd, med, n };
+  }
+  classes.forEach(cls => { cls.stat = computeStats(cls.values); });
+
+  function silverman(vals) {
+    const n = vals.length;
+    if (n < 2) return 1;
+    const mean = vals.reduce((a, b) => a + b, 0) / n;
+    const std  = Math.sqrt(vals.reduce((s, v) => s + (v - mean) ** 2, 0) / n) || 1e-6;
+    const s    = [...vals].sort((a, b) => a - b);
+    const iqr  = (s[Math.floor(n * 0.75)] - s[Math.floor(n * 0.25)]) || std;
+    return Math.max(1e-9, 1.06 * Math.min(std, iqr / 1.34) * Math.pow(n, -0.2));
+  }
+
+  function gaussKDE(vals, bw, pts) {
+    const inv = 1 / (vals.length * bw * Math.sqrt(2 * Math.PI));
+    return pts.map(x => vals.reduce((s, xi) => {
+      const u = (x - xi) / bw; return s + Math.exp(-0.5 * u * u);
+    }, 0) * inv);
+  }
+
+  const allVals = classes.flatMap(c => c.values);
+  if (!allVals.length) {
+    svgEl.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="#64748b" font-size="11" font-family="monospace">No data available</text>';
+    statsEl.innerHTML = '';
+    return;
+  }
+
+  const gMin = Math.min(...allVals), gMax = Math.max(...allVals);
+  const pad  = Math.max((gMax - gMin) * 0.08, 1e-6);
+  const yMin = gMin - pad, yMax = gMax + pad;
+
+  const W = 480, H = 240;
+  const mL = 54, mR = 10, mT = 16, mB = 38;
+  const plotW = W - mL - mR, plotH = H - mT - mB;
+  const yScale = v => mT + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
+
+  const violinSlot = plotW / 3;
+  const cx = [0, 1, 2].map(i => mL + violinSlot * i + violinSlot / 2);
+  const maxHW = violinSlot * 0.38;
+
+  const N_GRID = 100;
+  const evalGrid = Array.from({length: N_GRID}, (_, i) => yMin + (yMax - yMin) * i / (N_GRID - 1));
+
+  classes.forEach((cls, i) => {
+    if (!cls.stat || cls.values.length < 3) { cls.path = null; return; }
+    const bw = silverman(cls.values);
+    const dens = gaussKDE(cls.values, bw, evalGrid);
+    const peak = Math.max(...dens);
+    cls.path = evalGrid.map((v, j) => ({ y: yScale(v), hw: peak > 0 ? (dens[j] / peak) * maxHW : 0 }));
+  });
+
+  // Y-axis ticks
+  const N_TICKS = 6;
+  let svg = '';
+  for (let i = 0; i <= N_TICKS; i++) {
+    const v = yMin + (yMax - yMin) * i / N_TICKS;
+    const y = yScale(v);
+    svg += `<line x1="${mL}" y1="${y}" x2="${W-mR}" y2="${y}" stroke="#1e293b" stroke-width="0.5" stroke-dasharray="3,5"/>`;
+    svg += `<text x="${mL-4}" y="${y+3.5}" text-anchor="end" fill="#64748b" font-size="8.5" font-family="monospace">${Math.abs(v)<0.001&&v!==0?v.toExponential(1):v.toFixed(2)}</text>`;
+  }
+  // Y-axis label
+  svg += `<text x="10" y="${mT + plotH/2}" text-anchor="middle" fill="#64748b" font-size="9" font-family="monospace" transform="rotate(-90,10,${mT+plotH/2})">${propLabel}</text>`;
+
+  classes.forEach((cls, i) => {
+    const x = cx[i];
+    if (!cls.path) {
+      svg += `<text x="${x}" y="${H-mB+16}" text-anchor="middle" fill="${cls.stroke}" font-size="10" font-family="monospace">${cls.label}</text>`;
+      svg += `<text x="${x}" y="${H-mB+27}" text-anchor="middle" fill="#475569" font-size="8" font-family="monospace">n=0</text>`;
+      return;
+    }
+    const pts = cls.path;
+    const rPath = pts.map((p, j) => `${j?'L':'M'}${(x+p.hw).toFixed(1)},${p.y.toFixed(1)}`).join('');
+    const lPath = [...pts].reverse().map(p => `L${(x-p.hw).toFixed(1)},${p.y.toFixed(1)}`).join('');
+    svg += `<path d="${rPath}${lPath}Z" fill="${cls.fill}" stroke="${cls.stroke}" stroke-width="1.5"/>`;
+
+    // IQR box
+    const sorted = [...cls.values].sort((a,b)=>a-b), n = sorted.length;
+    const q1 = sorted[Math.floor(n*0.25)], q3 = sorted[Math.floor(n*0.75)];
+    const bxW = maxHW * 0.28;
+    svg += `<rect x="${x-bxW}" y="${yScale(q3)}" width="${bxW*2}" height="${Math.max(1,yScale(q1)-yScale(q3))}" fill="${cls.stroke}" opacity="0.35" rx="2"/>`;
+
+    // Median line
+    const medY = yScale(cls.stat.med);
+    svg += `<line x1="${x-maxHW*0.42}" y1="${medY}" x2="${x+maxHW*0.42}" y2="${medY}" stroke="white" stroke-width="2" stroke-linecap="round"/>`;
+
+    // Mean ± SD
+    const meanY = yScale(cls.stat.mean);
+    const sdTop = yScale(Math.min(cls.stat.mean + cls.stat.sd, yMax));
+    const sdBot = yScale(Math.max(cls.stat.mean - cls.stat.sd, yMin));
+    svg += `<line x1="${x}" y1="${sdTop}" x2="${x}" y2="${sdBot}" stroke="${cls.stroke}" stroke-width="1.5" opacity="0.8"/>`;
+    svg += `<circle cx="${x}" cy="${meanY}" r="3.5" fill="white" stroke="${cls.stroke}" stroke-width="1.8"/>`;
+
+    // Labels
+    svg += `<text x="${x}" y="${H-mB+16}" text-anchor="middle" fill="${cls.stroke}" font-size="10" font-weight="600" font-family="monospace">${cls.label}</text>`;
+    svg += `<text x="${x}" y="${H-mB+27}" text-anchor="middle" fill="#475569" font-size="8" font-family="monospace">n=${cls.stat.n}</text>`;
+  });
+
+  // Legend
+  svg += `<circle cx="${mL+8}" cy="${mT+6}" r="4" fill="white" stroke="#64748b" stroke-width="1.5"/>`;
+  svg += `<text x="${mL+15}" y="${mT+10}" fill="#64748b" font-size="8" font-family="monospace">mean</text>`;
+  svg += `<line x1="${mL+40}" y1="${mT+3}" x2="${mL+40}" y2="${mT+10}" stroke="#64748b" stroke-width="1.5"/>`;
+  svg += `<text x="${mL+44}" y="${mT+10}" fill="#64748b" font-size="8" font-family="monospace">±SD</text>`;
+  svg += `<line x1="${mL+66}" y1="${mT+6}" x2="${mL+76}" y2="${mT+6}" stroke="white" stroke-width="2"/>`;
+  svg += `<text x="${mL+79}" y="${mT+10}" fill="#64748b" font-size="8" font-family="monospace">median</text>`;
+
+  svgEl.innerHTML = svg;
+
+  // Stats table
+  statsEl.innerHTML = classes.map(cls => cls.stat
+    ? `<div style="text-align:center">
+         <div style="font-weight:700;color:${cls.stroke}">${cls.label}</div>
+         <div style="color:#94a3b8">mean ${cls.stat.mean.toFixed(3)}&thinsp;±&thinsp;${cls.stat.sd.toFixed(3)}</div>
+         <div style="color:#94a3b8">median ${cls.stat.med.toFixed(3)}</div>
+       </div>`
+    : `<div style="text-align:center"><div style="font-weight:700;color:${cls.stroke}">${cls.label}</div><div style="color:#475569">no data</div></div>`
+  ).join('');
+}
+
+// ── K-Means clustering ──────────────────────────────────────────────────
+// Mulberry32 seeded PRNG — returns a [0,1) float, same sequence for same seed
+function seededRand(seed) {
+  let s = seed >>> 0;
+  return function() {
+    s += 0x6D2B79F5;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function kMeans(points, k, iters=50, rand=Math.random) {
+  if (!points.length) return { labels: [], centroids: [] };
+  // Random init (uses provided rand fn — pass seededRand(seed)() for determinism)
+  let centroids = points.slice().sort(()=>rand()-0.5).slice(0,k).map(p=>[...p]);
+  let labels = new Array(points.length).fill(0);
+  for (let it=0; it<iters; it++) {
+    // Assign
+    labels = points.map(p => {
+      let best=0, bestD=Infinity;
+      centroids.forEach((c,i) => {
+        const d = (p[0]-c[0])**2 + (p[1]-c[1])**2;
+        if(d<bestD){bestD=d;best=i;}
+      });
+      return best;
+    });
+    // Update
+    centroids = centroids.map((_,i) => {
+      const pts = points.filter((_,j)=>labels[j]===i);
+      if(!pts.length) return centroids[i];
+      return [pts.reduce((s,p)=>s+p[0],0)/pts.length, pts.reduce((s,p)=>s+p[1],0)/pts.length];
+    });
+  }
+  return { labels, centroids };
+}
+
+function rebuildKmeans() {
+  if (!chartsBuilt) return;
+  if (chartKmeans) chartKmeans.destroy();
+  const data = getAnalyticsOligomers();
+  const xField = document.getElementById('km-x-axis').value;
+  const yField = document.getElementById('km-y-axis').value;
+  const k = parseInt(document.getElementById('km-k').value);
+  const colorBy = document.getElementById('km-color-by').value;
+
+  const pts = data.map(r => [r[xField], r[yField]]).filter(p => isFinite(p[0]) && isFinite(p[1]));
+  const { labels, centroids } = kMeans(pts, k);
+
+  const CLUSTER_COLORS = ['rgba(10,138,106,0.6)','rgba(37,99,235,0.6)','rgba(220,38,38,0.55)','rgba(217,119,6,0.65)','rgba(124,58,237,0.6)'];
+  const CLASS_COLORS3 = { '0':'rgba(220,38,38,0.55)','1':'rgba(217,119,6,0.6)','2':'rgba(22,163,74,0.6)' };
+
+  const clusterSets = Array.from({length:k},(_,ci)=>({
+    label: `Cluster ${ci+1}`,
+    data: pts.filter((_,j)=>labels[j]===ci).map(p=>({x:p[0],y:p[1]})),
+    backgroundColor: CLUSTER_COLORS[ci % CLUSTER_COLORS.length],
+    pointRadius: 3, pointHoverRadius: 5
+  }));
+
+  // Centroid markers
+  const centroidSet = {
+    label: 'Centroids',
+    data: centroids.map(c=>({x:c[0],y:c[1]})),
+    backgroundColor: '#1e293b',
+    pointRadius: 8, pointStyle: 'crossRot', pointHoverRadius: 10, borderColor: '#1e293b', borderWidth: 2
+  };
+
+  const PROP_LABELS = {
+    predicted_docking_score: 'Docking Score', avgLogP: 'Avg logP',
+    meanTPSA: 'Mean TPSA (Å²)', totalMW: 'Total MW (Da)',
+    DP: 'DP', score: 'Fluorescence Score', fluorescence: 'Fluorescence'
+  };
+  const fieldLabel = f => PROP_LABELS[f] || f;
+
+  chartKmeans = new Chart(document.getElementById('chart-kmeans'), {
+    type: 'scatter',
+    data: { datasets: [...clusterSets, centroidSet] },
+    options: {
+      ...chartOptions(fieldLabel(xField), fieldLabel(yField)),
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => `(${ctx.parsed.x.toFixed(2)}, ${ctx.parsed.y.toFixed(2)})` }}
+      }
+    }
+  });
+
+  // Legend
+  const legend = document.getElementById('cluster-legend');
+  legend.innerHTML = clusterSets.map((s,i) => `
+    <div style="display:flex;align-items:center;gap:6px;font-size:0.72rem;font-family:var(--font-mono)">
+      <span style="width:12px;height:12px;border-radius:50%;background:${CLUSTER_COLORS[i%CLUSTER_COLORS.length]};display:inline-block"></span>
+      ${s.label} (${s.data.length})
+    </div>`).join('') +
+    `<div style="display:flex;align-items:center;gap:6px;font-size:0.72rem;font-family:var(--font-mono);margin-top:4px">
+      <span style="color:#1e293b;font-size:1rem">✕</span> Centroids
+    </div>`;
+}
+
+// ── Pair Plot ──────────────────────────────────────────────────────────
+function buildPairPlot() {
+  const container = document.getElementById('pairplot-container');
+  container.innerHTML = '';
+  const data = getAnalyticsOligomers().slice(0, 600);
+  const vars = [
+    { key: 'score', label: 'Fluor. Score' },
+    { key: 'predicted_docking_score', label: 'Docking Score' },
+    { key: 'DP', label: 'DP' }
+  ];
+  const CLASS_COLORS3 = { '0':'rgba(220,38,38,0.5)','1':'rgba(217,119,6,0.55)','2':'rgba(22,163,74,0.55)' };
+
+  vars.forEach((vy, ri) => {
+    vars.forEach((vx, ci) => {
+      const cell = document.createElement('div');
+      cell.className = 'pairplot-cell';
+      const canvasId = `pp-${ri}-${ci}`;
+
+      if (ri === ci) {
+        // Diagonal: label + mini histogram
+        cell.style.height = '160px';
+        cell.innerHTML = `<canvas id="${canvasId}" style="width:100%;height:100%"></canvas>`;
+        container.appendChild(cell);
+        setTimeout(() => {
+          const vals = data.map(r => r[vx.key]).filter(isFinite);
+          const mn = Math.min(...vals), mx = Math.max(...vals);
+          const nbins = 15; const bw = (mx-mn)/nbins || 1;
+          const bins = Array.from({length:nbins},(_,i)=>mn+i*bw);
+          const cnts = new Array(nbins).fill(0);
+          vals.forEach(v => { const b=Math.min(nbins-1,Math.floor((v-mn)/bw)); cnts[b]++; });
+          new Chart(document.getElementById(canvasId), {
+            type:'bar',
+            data:{labels:bins.map(b=>b.toFixed(1)),datasets:[{data:cnts,backgroundColor:'rgba(10,138,106,0.55)',borderRadius:2}]},
+            options:{...chartOptions(vx.label,''),plugins:{legend:{display:false},title:{display:true,text:vx.label,font:{size:10,family:'Space Mono'},color:'#475569'}},scales:{x:{display:false},y:{display:false}},maintainAspectRatio:false}
+          });
+        }, 50);
+      } else {
+        cell.style.height = '160px';
+        cell.innerHTML = `<canvas id="${canvasId}" style="width:100%;height:100%"></canvas>`;
+        container.appendChild(cell);
+        setTimeout(() => {
+          const sets = ['0','1','2'].map(cls => ({
+            label: cls==='2'?'High':cls==='1'?'Med':'Low',
+            data: data.filter(r=>String(r['Consensus_Class'])===cls).map(r=>({x:r[vx.key],y:r[vy.key]})),
+            backgroundColor: CLASS_COLORS3[cls],
+            pointRadius: 2, pointHoverRadius: 4
+          }));
+          new Chart(document.getElementById(canvasId), {
+            type:'scatter',
+            data:{datasets:sets},
+            options:{
+              maintainAspectRatio:false,
+              plugins:{legend:{display:ri===0&&ci===1,position:'top',labels:{font:{size:8},boxWidth:8}}},
+              scales:{
+                x:{ticks:{font:{size:8},color:'#94a3b8'},title:{display:true,text:vx.label,font:{size:8},color:'#94a3b8'},grid:{color:'rgba(226,232,240,0.5)'}},
+                y:{ticks:{font:{size:8},color:'#94a3b8'},title:{display:true,text:vy.label,font:{size:8},color:'#94a3b8'},grid:{color:'rgba(226,232,240,0.5)'}}
+              }
+            }
+          });
+        }, 50);
+      }
+    });
+  });
+}
+
+function chartOptions(xLabel, yLabel) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { backgroundColor: '#ffffff', titleColor: '#1e293b', bodyColor: '#64748b', borderColor: '#e2e8f0', borderWidth: 1 }
+    },
+    scales: {
+      x: { grid: { color: 'rgba(226,232,240,0.8)' }, ticks: { color: '#64748b', font: { size: 10 } }, title: { display: true, text: xLabel, color: '#64748b', font: { size: 10 } } },
+      y: { grid: { color: 'rgba(226,232,240,0.8)' }, ticks: { color: '#64748b', font: { size: 10 } }, title: { display: true, text: yLabel, color: '#64748b', font: { size: 10 } } }
+    }
+  };
+}
+
+
+// ── Oligomer row tooltip ────────────────────────────────────────────────
+function showOligoTooltip(e, row) {
+  const cols = getMonomerCols();
+  const monoMap = cols.filter(c => (row[c]||0) > 0).map(c => ({ id: c, cnt: row[c] }));
+  const dock = parseFloat(row['predicted_docking_score']);
+  const score = row['fluorescence'];
+  const cls = String(row['Consensus_Class']);
+  const clsLabel = cls === '2' ? 'High' : cls === '1' ? 'Medium' : 'Low';
+  const dockColor = dock <= -8.78 ? '#0a8a6a' : dock <= -8.7 ? '#d97706' : '#dc2626';
+  const clsColor  = cls === '2' ? '#15803d' : cls === '1' ? '#92400e' : '#b91c1c';
+
+  // Chips
+  const chips = monoMap.map(m => {
+    const feat = FEATURES[m.id] || {};
+    const charge = feat.charge ?? 0;
+    const isHydro = (feat.logp ?? 0) > 2;
+    const chipColor = charge > 0 ? '#15803d' : charge < 0 ? '#b91c1c' : isHydro ? '#92400e' : '#2563eb';
+    const chipBg   = charge > 0 ? 'rgba(22,163,74,0.1)' : charge < 0 ? 'rgba(220,38,38,0.08)' : isHydro ? 'rgba(234,179,8,0.12)' : 'rgba(37,99,235,0.08)';
+    return `<span style="background:${chipBg};color:${chipColor};border:1px solid ${chipColor}40;border-radius:5px;padding:2px 7px;font-size:0.68rem;font-family:var(--font-mono)">${m.id}×${m.cnt}</span>`;
+  }).join('');
+
+  // FES images for monomers that have them
+  const fesItems = monoMap
+    .filter(m => FILE_PATHS.metadynamics[m.id])
+    .map(m => {
+      const path = FILE_PATHS.metadynamics[m.id];
+      return `<div class="ott-fes-item">
+        <img src="${path}" alt="${m.id}" onerror="this.style.display='none'">
+        <div class="ott-fes-label">${m.id}</div>
+      </div>`;
+    }).join('');
+
+  // Structure SVGs from smiles_svg dir
+  const structItems = monoMap.map(m => {
+    const path = FILE_PATHS.smilesSvgDir + '/' + m.id + '.svg';
+    return `<div class="ott-struct-item">
+      <img src="${path}" alt="${m.id}" onerror="this.style.display='none'">
+      <div class="ott-struct-label">${m.id}</div>
+    </div>`;
+  }).join('');
+
+  const fesSection = fesItems ? `
+    <div class="ott-fes-wrap">
+      <div class="ott-fes-title">Metadynamics FES</div>
+      <div class="ott-fes-grid" style="grid-template-columns:repeat(${Math.min(monoMap.filter(m=>FILE_PATHS.metadynamics[m.id]).length,2)},1fr)">${fesItems}</div>
+    </div>` : '';
+
+  const structSection = `
+    <div class="ott-struct-wrap">
+      <div class="ott-fes-title">Monomer Structures <span style="color:#94a3b8;font-weight:normal">(place SVGs in ${FILE_PATHS.smilesSvgDir}/)</span></div>
+      <div class="ott-struct-grid">${structItems}</div>
+    </div>`;
+
+  const tt = document.getElementById('oligo-tooltip');
+  tt.innerHTML = `
+    <div class="ott-title">Oligomer Composition</div>
+    <div class="ott-chips">${chips}</div>
+    <div class="ott-row"><span class="ott-key">Degree of Polymerization</span><span class="ott-val">${Math.round(row['DP'])}</span></div>
+    <div class="ott-row"><span class="ott-key">Docking Score</span><span class="ott-val" style="color:${dockColor}">${dock.toFixed(3)}</span></div>
+    <div class="ott-row"><span class="ott-key">Fluorescence Score</span><span class="ott-val">${score}</span></div>
+    <div class="ott-row"><span class="ott-key">Consensus Class</span><span class="ott-val" style="color:${clsColor}">${clsLabel}</span></div>
+    ${fesSection}
+    ${structSection}
+  `;
+  tt.style.display = 'block';
+  posOligoTooltip(e);
+}
+
+function posOligoTooltip(e) {
+  const tt = document.getElementById('oligo-tooltip');
+  const w = tt.offsetWidth || 380, h = tt.offsetHeight || 300;
+  const margin = 16;
+  let x = e.clientX + margin, y = e.clientY + margin;
+  if (x + w > window.innerWidth)  x = e.clientX - w - margin;
+  if (y + h > window.innerHeight) y = e.clientY - h - margin;
+  if (y < 0) y = margin;
+  tt.style.left = x + 'px';
+  tt.style.top  = y + 'px';
+}
+
+// ── Oligomer fullscreen popup ──────────────────────────────────────────
+let popupCharts = [];
+
+function closeOligoPopup(e) {
+  if (e && e.target !== document.getElementById('oligo-popup-overlay')) return;
+  document.getElementById('oligo-popup-overlay').classList.remove('open');
+  popupCharts.forEach(c => c.destroy());
+  popupCharts = [];
+}
+
+function openOligoPopup(row) {
+  popupCharts.forEach(c => c.destroy());
+  popupCharts = [];
+
+  const cols = getMonomerCols();
+  const monoMap = cols.filter(c => (row[c]||0) > 0).map(c => ({ id: c, cnt: row[c] }));
+  const dock = parseFloat(row['predicted_docking_score']);
+  const score = row['fluorescence'];
+  const cls = String(row['Consensus_Class']);
+  const clsLabel = cls === '2' ? 'High' : cls === '1' ? 'Medium' : 'Low';
+  const dockColor = dock <= -8.78 ? '#0a8a6a' : dock <= -8.7 ? '#d97706' : '#dc2626';
+  const clsColor  = cls === '2' ? '#15803d' : cls === '1' ? '#92400e' : '#b91c1c';
+
+  const chips = monoMap.map(m => {
+    const feat = FEATURES[m.id] || {};
+    const charge = feat.charge ?? 0;
+    const isHydro = (feat.logp ?? 0) > 2;
+    const col = charge > 0 ? '#15803d' : charge < 0 ? '#b91c1c' : isHydro ? '#92400e' : '#2563eb';
+    const bg  = charge > 0 ? 'rgba(22,163,74,0.1)' : charge < 0 ? 'rgba(220,38,38,0.08)' : isHydro ? 'rgba(234,179,8,0.12)' : 'rgba(37,99,235,0.08)';
+    return `<span class="popup-chip" style="background:${bg};color:${col};border:1px solid ${col}40">${m.id} ×${m.cnt}</span>`;
+  }).join('');
+
+  const structs = monoMap.map(m =>
+    `<div class="popup-struct-item">
+      <img src="${FILE_PATHS.smilesSvgDir}/${m.id}.svg" onerror="this.style.display='none'">
+      <div class="popup-struct-label">${m.id}</div>
+    </div>`).join('');
+
+  const fesItems = monoMap.filter(m => FILE_PATHS.metadynamics[m.id]).map(m =>
+    `<div class="popup-fes-item">
+      <img src="${FILE_PATHS.metadynamics[m.id]}" onerror="this.style.display='none'">
+      <div class="popup-fes-label">${m.id} FES</div>
+    </div>`).join('');
+
+  const featRows = monoMap.map(m => {
+    const f = FEATURES[m.id] || {};
+    const charge = f.charge ?? 0;
+    const isHydro = (f.logp ?? 0) > 2;
+    const type = charge > 0 ? '<span style="color:#16a34a">● Positive</span>' : charge < 0 ? '<span style="color:#dc2626">● Negative</span>' : isHydro ? '<span style="color:#d97706">● Hydrophobic</span>' : '<span style="color:#2563eb">● Neutral</span>';
+    return `<tr>
+      <td style="font-family:var(--font-mono);color:var(--accent);padding:4px 8px">${m.id}</td>
+      <td style="padding:4px 8px">${type}</td>
+      <td style="font-family:var(--font-mono);padding:4px 8px">${f.mw?.toFixed(1)??'—'}</td>
+      <td style="font-family:var(--font-mono);padding:4px 8px">${f.logp?.toFixed(2)??'—'}</td>
+      <td style="font-family:var(--font-mono);padding:4px 8px">${f.tpsa?.toFixed(1)??'—'}</td>
+    </tr>`;
+  }).join('');
+
+  const uid = Date.now();
+  const body = document.getElementById('popup-body');
+  body.innerHTML = `
+    <!-- Left column -->
+    <div>
+      <div class="popup-section-title">Composition</div>
+      <div class="popup-chips">${chips}</div>
+      <div class="popup-info-grid">
+        <div class="popup-prop"><span class="popup-prop-key">Degree of Polymerization</span><span class="popup-prop-val">${Math.round(row['DP'])}</span></div>
+        <div class="popup-prop"><span class="popup-prop-key">Docking Score</span><span class="popup-prop-val" style="color:${dockColor}">${dock.toFixed(3)}</span></div>
+        <div class="popup-prop"><span class="popup-prop-key">Fluorescence Score</span><span class="popup-prop-val">${score}</span></div>
+        <div class="popup-prop"><span class="popup-prop-key">Consensus Class</span><span class="popup-prop-val" style="color:${clsColor}">${clsLabel}</span></div>
+      </div>
+
+      <div class="popup-section-title" style="margin-top:1.25rem">Monomer Properties</div>
+      <table style="width:100%;border-collapse:collapse;font-size:0.75rem">
+        <thead><tr style="border-bottom:1px solid var(--border)">
+          <th style="text-align:left;padding:4px 8px;font-family:var(--font-mono);font-size:0.65rem;color:var(--muted)">ID</th>
+          <th style="text-align:left;padding:4px 8px;font-family:var(--font-mono);font-size:0.65rem;color:var(--muted)">Type</th>
+          <th style="text-align:left;padding:4px 8px;font-family:var(--font-mono);font-size:0.65rem;color:var(--muted)">MW</th>
+          <th style="text-align:left;padding:4px 8px;font-family:var(--font-mono);font-size:0.65rem;color:var(--muted)">logP</th>
+          <th style="text-align:left;padding:4px 8px;font-family:var(--font-mono);font-size:0.65rem;color:var(--muted)">TPSA</th>
+        </tr></thead>
+        <tbody>${featRows}</tbody>
+      </table>
+
+      <div class="popup-section-title" style="margin-top:1.25rem">Monomer Structures</div>
+      <div class="popup-struct-grid">${structs}</div>
+    </div>
+
+    <!-- Right column -->
+    <div>
+      ${fesItems ? `<div class="popup-section-title">Metadynamics FES</div><div class="popup-fes-grid">${fesItems}</div>` : ''}
+      <div class="popup-section-title" style="margin-top:${fesItems?'1.25rem':'0'}">Score Charts</div>
+      <div class="popup-chart-card" style="margin-bottom:1rem">
+        <h4>Fluorescence Score vs Docking Score — Context</h4>
+        <div class="popup-chart-wrap"><canvas id="popup-scatter-${uid}"></canvas></div>
+      </div>
+      <div class="popup-chart-card">
+        <h4>Monomer Count Distribution</h4>
+        <div class="popup-chart-wrap"><canvas id="popup-mono-bar-${uid}"></canvas></div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('popup-title').textContent = `Oligomer · DP=${Math.round(row['DP'])} · ${clsLabel} Class`;
+  document.getElementById('oligo-popup-overlay').classList.add('open');
+
+  // Build context scatter
+  setTimeout(() => {
+    const allPts = OLIGOMERS.slice(0, 600).map(r => ({ x: r['predicted_docking_score'], y: r['fluorescence'] }));
+    const c1 = new Chart(document.getElementById(`popup-scatter-${uid}`), {
+      type: 'scatter',
+      data: {
+        datasets: [
+          { label: 'All Oligomers', data: allPts, backgroundColor: 'rgba(100,116,139,0.2)', pointRadius: 2 },
+          { label: 'This Oligomer', data: [{ x: dock, y: score }], backgroundColor: '#dc2626', pointRadius: 8, pointStyle: 'star' }
+        ]
+      },
+      options: { ...chartOptions('Docking Score','Fluorescence Score'), plugins:{ legend:{display:true,position:'top',labels:{font:{size:9},boxWidth:10}}, tooltip:{callbacks:{label:ctx=>ctx.datasetIndex===1?`THIS · Dock:${ctx.parsed.x.toFixed(3)} Fluor:${ctx.parsed.y}`:`Dock:${ctx.parsed.x.toFixed(3)} Fluor:${ctx.parsed.y}`}} } }
+    });
+    popupCharts.push(c1);
+
+    // Mini bar: monomer counts in this oligomer
+    const c2 = new Chart(document.getElementById(`popup-mono-bar-${uid}`), {
+      type: 'bar',
+      data: {
+        labels: monoMap.map(m => m.id),
+        datasets: [{
+          label: 'Count',
+          data: monoMap.map(m => m.cnt),
+          backgroundColor: monoMap.map(m => {
+            const f = FEATURES[m.id] || {};
+            const charge = f.charge ?? 0;
+            const isHydro = (f.logp ?? 0) > 2;
+            return charge > 0 ? 'rgba(22,163,74,0.7)' : charge < 0 ? 'rgba(220,38,38,0.65)' : isHydro ? 'rgba(217,119,6,0.65)' : 'rgba(37,99,235,0.6)';
+          }),
+          borderRadius: 4
+        }]
+      },
+      options: chartOptions('Monomer','Count')
+    });
+    popupCharts.push(c2);
+  }, 80);
+}
+
+// ── Save popup as PNG ──────────────────────────────────────────────────
+function savePopupPng() {
+  const popup = document.getElementById('oligo-popup');
+  if (typeof html2canvas !== 'undefined') {
+    html2canvas(popup, { scale: 2, backgroundColor: '#fff' }).then(canvas => {
+      const a = document.createElement('a');
+      a.download = 'oligomer_detail.png';
+      a.href = canvas.toDataURL('image/png');
+      a.click();
+    });
+  } else {
+    // Dynamically load html2canvas if not present
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    s.onload = () => savePopupPng();
+    document.head.appendChild(s);
+  }
+}
+
+function savePopupSvg() {
+  // Build a simple SVG representation of the popup text data
+  const title = document.getElementById('popup-title').textContent;
+  const body = document.getElementById('popup-body');
+  const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="600">
+    <rect width="900" height="600" fill="#fff" rx="12"/>
+    <text x="24" y="40" font-family="monospace" font-size="14" fill="#0a8a6a" font-weight="bold">${title}</text>
+    <foreignObject x="0" y="50" width="900" height="550">
+      <div xmlns="http://www.w3.org/1999/xhtml" style="padding:16px;font-family:sans-serif;font-size:12px">
+        ${body.innerHTML.replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+      </div>
+    </foreignObject>
+  </svg>`;
+  // Export charts as PNG instead — better quality
+  const popupEl = document.getElementById('oligo-popup');
+  const blob = new Blob([`<!DOCTYPE html><html><head><style>body{margin:0;background:#fff;font-family:DM Sans,sans-serif}*{box-sizing:border-box}</style></head><body>${popupEl.outerHTML}</body></html>`], {type:'text/html'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'oligomer_detail.html';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ── PCA (simple 2-component, power iteration) ─────────────────────────
+function simplePCA(data, features) {
+  const n = data.length;
+  if (n < 3) return data.map(() => ({ pc1: 0, pc2: 0 }));
+
+  const means = features.map(f => data.reduce((s, r) => s + (+r[f] || 0), 0) / n);
+  const stds  = features.map((f, i) => {
+    const v = data.reduce((s, r) => s + ((+r[f] || 0) - means[i]) ** 2, 0) / n;
+    return Math.sqrt(v) || 1;
+  });
+  const X = data.map(r => features.map((f, i) => ((+r[f] || 0) - means[i]) / stds[i]));
+  const p = features.length;
+
+  // Covariance matrix
+  const cov = Array.from({ length: p }, (_, i) =>
+    Array.from({ length: p }, (_, j) =>
+      X.reduce((s, row) => s + row[i] * row[j], 0) / Math.max(n - 1, 1)
+    )
+  );
+
+  function powerIter(cov, deflate) {
+    let v = Array.from({ length: p }, (_, i) => (i === 0 ? 1 : Math.random() * 0.01));
+    for (let it = 0; it < 120; it++) {
+      let w = cov.map(row => row.reduce((s, c, j) => s + c * v[j], 0));
+      if (deflate) {
+        const dot = w.reduce((s, c, j) => s + c * deflate[j], 0);
+        w = w.map((c, j) => c - dot * deflate[j]);
+      }
+      const norm = Math.sqrt(w.reduce((s, c) => s + c * c, 0)) || 1;
+      v = w.map(c => c / norm);
+    }
+    return v;
+  }
+
+  const pc1 = powerIter(cov, null);
+  const pc2 = powerIter(cov, pc1);
+
+  return X.map(row => ({
+    pc1: row.reduce((s, v, i) => s + v * pc1[i], 0),
+    pc2: row.reduce((s, v, i) => s + v * pc2[i], 0)
+  }));
+}
+
+// ── Synthesis candidates ───────────────────────────────────────────────
+let chartPcaSynth = null;
+
+function buildSynthesisCandidates() {
+  const synthFileEl = document.getElementById('synth-file-select');
+  if (!synthFileEl) return;
+  const fileName = synthFileEl.value;
+  const sourceData = oligomerFileData[fileName];
+  if (!sourceData || !sourceData.length) return;
+
+  const k = parseInt(document.getElementById('synth-k').value) || 5;
+  const N_CANDS = 20;
+  const MIN_CLUSTER_SIZE = 20;
+  const FIXED_SEED = 0x52484F4D; // "RHOM" in ASCII — same compounds every run
+  const PCA_FEATS = ['predicted_docking_score', 'avgLogP', 'meanTPSA', 'totalMW', 'DP'];
+
+  // Separate by fluorescence class (Consensus_Class already normalised at parse time)
+  const highData = sourceData.filter(r => isFinite(+r['predicted_docking_score']) && String(r['Consensus_Class']) === '2');
+  const lowData  = sourceData.filter(r => isFinite(+r['predicted_docking_score']) && String(r['Consensus_Class']) === '0');
+
+  // Convex hull (gift-wrapping / Jarvis march)
+  function convexHull(pts) {
+    const n = pts.length;
+    if (n < 3) return pts.concat(pts.length ? [pts[0]] : []);
+    let start = 0;
+    for (let i = 1; i < n; i++) if (pts[i].x < pts[start].x || (pts[i].x === pts[start].x && pts[i].y < pts[start].y)) start = i;
+    const hull = [];
+    let cur = start, safety = 0;
+    do {
+      hull.push(pts[cur]);
+      let nxt = (cur + 1) % n;
+      for (let i = 0; i < n; i++) {
+        const cross = (pts[nxt].x - pts[cur].x) * (pts[i].y - pts[cur].y)
+                    - (pts[nxt].y - pts[cur].y) * (pts[i].x - pts[cur].x);
+        if (cross < 0) nxt = i;
+      }
+      cur = nxt;
+    } while (cur !== start && ++safety <= n + 1);
+    hull.push(hull[0]); // close polygon
+    return hull;
+  }
+
+  // Select N diverse candidates: PCA → seeded k-means → round-robin over clusters ≥ MIN_CLUSTER_SIZE
+  function selectDiverse(data, n, rand) {
+    if (!data.length) return [];
+    const kk = Math.min(k, Math.floor(data.length / MIN_CLUSTER_SIZE));
+    if (kk < 1) return data.slice().sort((a, b) => +a['predicted_docking_score'] - +b['predicted_docking_score']).slice(0, n)
+      .map(r => ({ ...r, _cluster: 0, _pc1: 0, _pc2: 0, _clusterIdx: 0 }));
+
+    const pcs = simplePCA(data, PCA_FEATS);
+    const pts = pcs.map(p => [p.pc1, p.pc2]);
+    const { labels } = kMeans(pts, kk, 50, rand);
+    const tagged = data.map((r, i) => ({ ...r, _cluster: labels[i], _pc1: pcs[i].pc1, _pc2: pcs[i].pc2 }));
+
+    // Group into clusters, keep only those with ≥ MIN_CLUSTER_SIZE points
+    const clusters = {};
+    tagged.forEach(r => { (clusters[r._cluster] = clusters[r._cluster] || []).push(r); });
+    const validKeys = Object.keys(clusters).filter(ck => clusters[ck].length >= MIN_CLUSTER_SIZE);
+    validKeys.forEach(ck => clusters[ck].sort((a, b) =>
+      +a['predicted_docking_score'] - +b['predicted_docking_score'])); // most negative first
+
+    // Round-robin across valid clusters
+    const cands = [], ptrs = {};
+    validKeys.forEach(ck => ptrs[ck] = 0);
+    while (cands.length < n) {
+      let added = false;
+      for (const ck of validKeys) {
+        if (cands.length >= n) break;
+        if (ptrs[ck] < clusters[ck].length) {
+          cands.push({ ...clusters[ck][ptrs[ck]], _clusterIdx: parseInt(ck) });
+          ptrs[ck]++;
+          added = true;
+        }
+      }
+      if (!added) break;
+    }
+    return cands;
+  }
+
+  // Each class gets its own seeded RNG instance (same seed → same result every time)
+  const highCands = selectDiverse(highData, N_CANDS, seededRand(FIXED_SEED));
+  const lowCands  = selectDiverse(lowData,  N_CANDS, seededRand(FIXED_SEED));
+
+  renderSynthTable('synth-high-tbody', highCands, 'high', 5);
+  renderSynthTable('synth-low-tbody',  lowCands,  'low',  5);
+
+  // ── PCA scatter with convex-hull cluster boundaries ────────────────────
+  if (chartPcaSynth) chartPcaSynth.destroy();
+
+  const allData   = sourceData.filter(r => isFinite(+r['predicted_docking_score']));
+  const allPcs    = simplePCA(allData, PCA_FEATS);
+  const allTagged = allData.map((r, i) => ({ ...r, _pc1: allPcs[i].pc1, _pc2: allPcs[i].pc2 }));
+
+  // Global k-means (seeded) for cluster boundary visualisation
+  const globalK   = Math.max(2, Math.min(k, Math.floor(allData.length / 10)));
+  const globalPts = allPcs.map(p => [p.pc1, p.pc2]);
+  const { labels: globalLabels } = kMeans(globalPts, globalK, 50, seededRand(FIXED_SEED));
+
+  const clusterGroups = {};
+  allTagged.forEach((r, i) => {
+    const cl = globalLabels[i];
+    (clusterGroups[cl] = clusterGroups[cl] || []).push({ x: r._pc1, y: r._pc2 });
+  });
+
+  const CLUSTER_PALETTE = [
+    'rgba(99,102,241,',  'rgba(236,72,153,',  'rgba(251,146,60,',
+    'rgba(20,184,166,',  'rgba(250,204,21,',  'rgba(132,204,22,',
+    'rgba(6,182,212,',   'rgba(168,85,247,',  'rgba(244,63,94,',
+    'rgba(16,185,129,'
+  ];
+
+  const hullDatasets = Object.keys(clusterGroups).map((cl, i) => {
+    const col  = CLUSTER_PALETTE[i % CLUSTER_PALETTE.length];
+    const hull = convexHull(clusterGroups[cl]);
+    return {
+      type: 'line', label: `Cluster ${parseInt(cl) + 1}`,
+      data: hull,
+      borderColor: `${col}0.55)`, backgroundColor: `${col}0.07)`,
+      borderWidth: 1.5, borderDash: [5, 3],
+      pointRadius: 0, fill: true, tension: 0.15, order: 10, showLine: true
+    };
+  });
+
+  const nHull = hullDatasets.length;
+  const bgDatasets = [
+    ...hullDatasets,
+    {
+      label: 'High Fluor. (class 2)',
+      data: allTagged.filter(r => String(r['Consensus_Class']) === '2').map(r => ({ x: r._pc1, y: r._pc2 })),
+      backgroundColor: 'rgba(22,163,74,0.35)', pointRadius: 2.5, pointHoverRadius: 4, order: 5
+    },
+    {
+      label: 'Medium Fluor. (class 1)',
+      data: allTagged.filter(r => String(r['Consensus_Class']) === '1').map(r => ({ x: r._pc1, y: r._pc2 })),
+      backgroundColor: 'rgba(217,119,6,0.35)', pointRadius: 2.5, pointHoverRadius: 4, order: 5
+    },
+    {
+      label: 'Low Fluor. (class 0)',
+      data: allTagged.filter(r => String(r['Consensus_Class']) === '0').map(r => ({ x: r._pc1, y: r._pc2 })),
+      backgroundColor: 'rgba(220,38,38,0.30)', pointRadius: 2.5, pointHoverRadius: 4, order: 5
+    },
+    {
+      label: '▲ High Fluor. Candidates',
+      data: highCands.map(r => ({ x: r._pc1, y: r._pc2 })),
+      backgroundColor: '#16a34a', borderColor: '#fff', borderWidth: 1.5,
+      pointRadius: 8, pointStyle: 'triangle', pointHoverRadius: 11, order: 1
+    },
+    {
+      label: '▼ Low Fluor. Candidates',
+      data: lowCands.map(r => ({ x: r._pc1, y: r._pc2 })),
+      backgroundColor: '#dc2626', borderColor: '#fff', borderWidth: 1.5,
+      pointRadius: 8, pointStyle: 'rectRot', pointHoverRadius: 11, order: 1
+    }
+  ];
+
+  chartPcaSynth = new Chart(document.getElementById('chart-pca-synth'), {
+    type: 'scatter',
+    data: { datasets: bgDatasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: true, position: 'top',
+          labels: { font: { size: 9 }, boxWidth: 10, padding: 8,
+            filter: item => !item.text.startsWith('Cluster ') }
+        },
+        tooltip: { callbacks: {
+          label: ctx => {
+            const di = ctx.datasetIndex;
+            const highIdx = nHull + 3, lowIdx = nHull + 4;
+            if (di === highIdx || di === lowIdx) {
+              const cands = di === highIdx ? highCands : lowCands;
+              const r = cands[ctx.dataIndex];
+              if (!r) return '';
+              const cols = getMonomerCols();
+              const comp = cols.filter(c => (r[c]||0)>0).map(c=>`${c}×${r[c]}`).join(' ');
+              return [`Dock: ${(+r['predicted_docking_score']).toFixed(3)}`, `Fluor: ${r.fluorescence}`, `Cluster: C${(r._clusterIdx??0)+1}`, comp];
+            }
+            if (di < nHull) return `Cluster ${di + 1}`;
+            return `PC1:${ctx.parsed.x.toFixed(2)} PC2:${ctx.parsed.y.toFixed(2)}`;
+          }
+        }}
+      },
+      scales: {
+        x: { title: { display: true, text: 'PC 1', font: { size: 10 } }, ticks: { color: '#94a3b8', font: { size: 9 } }, grid: { color: 'rgba(226,232,240,0.7)' } },
+        y: { title: { display: true, text: 'PC 2', font: { size: 10 } }, ticks: { color: '#94a3b8', font: { size: 9 } }, grid: { color: 'rgba(226,232,240,0.7)' } }
+      }
+    }
+  });
+
+  // Legend: class counts
+  const leg = document.getElementById('pca-cluster-legend');
+  leg.innerHTML = [
+    ['#16a34a', `High fluorescence pool: ${highData.length}`],
+    ['#d97706', `Medium fluorescence pool: ${sourceData.filter(r=>String(r['Consensus_Class'])==='1').length}`],
+    ['#dc2626', `Low fluorescence pool: ${lowData.length}`],
+  ].map(([c, txt]) =>
+    `<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.68rem;font-family:var(--font-mono);background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:2px 8px">
+      <span style="width:9px;height:9px;border-radius:50%;background:${c};display:inline-block"></span>${txt}
+    </span>`
+  ).join('');
+}
+
+// ── Synthesis table sort state ─────────────────────────────────────────
+const _synthSort = {};   // { tbodyId: { col, dir } }
+
+function sortSynthTable(tbodyId, col) {
+  const prev = _synthSort[tbodyId] || { col: null, dir: 1 };
+  const dir  = prev.col === col ? -prev.dir : 1;
+  _synthSort[tbodyId] = { col, dir };
+
+  const cands = _synthCandData[tbodyId];
+  if (!cands || !cands.length) return;
+
+  cands.sort((a, b) => {
+    const va = a[col], vb = b[col];
+    const na = parseFloat(va), nb = parseFloat(vb);
+    if (!isNaN(na) && !isNaN(nb)) return dir * (na - nb);
+    return dir * String(va ?? '').localeCompare(String(vb ?? ''));
+  });
+
+  const type = tbodyId.includes('high') ? 'high' : 'low';
+  renderSynthTable(tbodyId, cands, type, 5);   // reset to 5 rows on sort
+
+  // Update header indicators
+  const tbody = document.getElementById(tbodyId);
+  const table = tbody?.closest('table');
+  if (!table) return;
+  table.querySelectorAll('th[data-col]').forEach(th => {
+    th.classList.remove('sort-asc', 'sort-desc');
+    if (th.dataset.col === col) th.classList.add(dir > 0 ? 'sort-asc' : 'sort-desc');
+  });
+}
+
+// Store candidate arrays for tooltip lookup
+const _synthCandData = {};
+
+function renderSynthTable(tbodyId, cands, type, showN) {
+  const cols = getMonomerCols();
+  const tbody = document.getElementById(tbodyId);
+  if (!tbody) return;
+
+  // Store for event lookup
+  _synthCandData[tbodyId] = cands;
+
+  const rankStyle = type === 'high'
+    ? 'color:#16a34a;border:1.5px solid rgba(22,163,74,0.4);background:rgba(22,163,74,0.07)'
+    : 'color:#dc2626;border:1.5px solid rgba(220,38,38,0.35);background:rgba(220,38,38,0.06)';
+  const expandColor = type === 'high' ? '#16a34a' : '#dc2626';
+
+  const makeRow = (row, i) => {
+    const monoMap = cols.filter(c => (row[c]||0) > 0).map(c => ({ id: c, cnt: row[c] }));
+    const chips = monoMap.map(m => `<span class="mono-chip">${m.id}×${m.cnt}</span>`).join('');
+    const dock = +row['predicted_docking_score'];
+    const dockColor = dock <= -8.78 ? 'var(--high)' : dock <= -8.7 ? 'var(--med)' : 'var(--low)';
+    const fluor = row.fluorescence || '—';
+    const fluorColor = fluor === 'High' ? '#16a34a' : fluor === 'Medium' ? '#d97706' : '#dc2626';
+    const hidden = i >= showN ? ' class="synth-extra-row" style="display:none"' : '';
+    return `<tr data-sidx="${i}"${hidden} style="cursor:pointer">
+      <td><span class="cand-rank" style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;font-size:0.82rem;${rankStyle}">${i + 1}</span></td>
+      <td><div class="mono-chips">${chips}</div></td>
+      <td style="font-family:var(--font-mono)">${Math.round(row['DP'])}</td>
+      <td style="font-family:var(--font-mono);color:${dockColor};font-weight:600">${dock.toFixed(3)}</td>
+      <td style="font-family:var(--font-mono);color:${fluorColor}">${fluor}</td>
+      <td style="font-family:var(--font-mono)">${(row.avgLogP||0).toFixed(2)}</td>
+      <td style="font-family:var(--font-mono)">${(row.meanTPSA||0).toFixed(1)}</td>
+      <td style="font-family:var(--font-mono)">${(row.totalMW||0).toFixed(1)}</td>
+      <td style="font-family:var(--font-mono);color:var(--muted)">C${(row._clusterIdx ?? 0) + 1}</td>
+    </tr>`;
+  };
+
+  const rows = cands.map(makeRow).join('');
+  const expandBtn = cands.length > showN
+    ? `<tr id="${tbodyId}-expand-row">
+        <td colspan="9" style="text-align:center;padding:0.6rem">
+          <button onclick="toggleSynthExpand('${tbodyId}','${expandColor}')" id="${tbodyId}-expand-btn"
+            style="background:none;border:1px solid ${expandColor};color:${expandColor};border-radius:6px;padding:4px 16px;font-family:var(--font-mono);font-size:0.72rem;cursor:pointer">
+            ＋ Show all ${cands.length} candidates
+          </button>
+        </td>
+      </tr>` : '';
+
+  tbody.innerHTML = rows + expandBtn;
+
+  // Attach hover + click events (same as Oligomer Library)
+  tbody.querySelectorAll('tr[data-sidx]').forEach(tr => {
+    const idx = parseInt(tr.dataset.sidx);
+    const row = cands[idx];
+    tr.addEventListener('mouseenter', e => showOligoTooltip(e, row));
+    tr.addEventListener('mousemove',  e => posOligoTooltip(e));
+    tr.addEventListener('mouseleave', () => { document.getElementById('oligo-tooltip').style.display = 'none'; });
+    tr.addEventListener('click', () => { document.getElementById('oligo-tooltip').style.display = 'none'; openOligoPopup(row); });
+  });
+}
+
+function toggleSynthExpand(tbodyId, color) {
+  const tbody = document.getElementById(tbodyId);
+  const btn   = document.getElementById(tbodyId + '-expand-btn');
+  const hidden = tbody.querySelectorAll('.synth-extra-row');
+  const isExpanded = hidden[0]?.style.display !== 'none';
+  hidden.forEach(r => r.style.display = isExpanded ? 'none' : '');
+  btn.textContent = isExpanded ? `＋ Show all ${hidden.length + 5} candidates` : '－ Show fewer';
+  btn.style.borderColor = color;
+  btn.style.color = color;
+}
+
+// ── Pure-JS SHA-256 (works on HTTP, file://, any origin) ──────────────
+function sha256(str) {
+  function rightRotate(v, a) { return (v >>> a) | (v << (32 - a)); }
+  const mathPow = Math.pow;
+  const maxWord = mathPow(2, 32);
+  let result = '';
+  const words = [];
+  let isComposite = {};
+  for (let candidate = 2; words.length < 64; candidate++) {
+    if (!isComposite[candidate]) {
+      for (let i = candidate * candidate; i < 313; i += candidate) isComposite[i] = true;
+      words.push(mathPow(candidate, 1/3) % 1 * maxWord | 0);  // cbrt frac → round constants K
+    }
+  }
+  const primes = [];
+  for (let candidate = 2; primes.length < 8; candidate++) {
+    if (!isComposite[candidate]) primes.push(mathPow(candidate, 1/2) % 1 * maxWord | 0);  // sqrt frac → init hash H
+  }
+  // Convert string to bytes
+  str = unescape(encodeURIComponent(str));
+  const bytes = [];
+  for (let i = 0; i < str.length; i++) bytes.push(str.charCodeAt(i));
+  bytes.push(0x80);
+  while (bytes.length % 64 !== 56) bytes.push(0);
+  const bitLen = (str.length - 0) * 8;
+  for (let i = 7; i >= 0; i--) bytes.push((bitLen / mathPow(256, i)) & 0xff);
+
+  const hash = primes.slice();
+  const w = [];
+  for (let i = 0; i < bytes.length; i += 64) {
+    const H = hash.slice();
+    for (let j = 0; j < 64; j++) {
+      const b = i + j * 4;
+      if (j < 16) {
+        w[j] = ((bytes[b] || 0) << 24) | ((bytes[b+1] || 0) << 16) | ((bytes[b+2] || 0) << 8) | (bytes[b+3] || 0);
+      } else {
+        const s0 = rightRotate(w[j-15], 7) ^ rightRotate(w[j-15], 18) ^ (w[j-15] >>> 3);
+        const s1 = rightRotate(w[j-2], 17) ^ rightRotate(w[j-2], 19) ^ (w[j-2] >>> 10);
+        w[j] = (w[j-16] + s0 + w[j-7] + s1) | 0;
+      }
+      const [a,b2,c,d,e,f,g,h] = [H[0],H[1],H[2],H[3],H[4],H[5],H[6],H[7]];
+      const S1 = rightRotate(e,6) ^ rightRotate(e,11) ^ rightRotate(e,25);
+      const ch = (e & f) ^ (~e & g);
+      const temp1 = (h + S1 + ch + words[j] + w[j]) | 0;
+      const S0 = rightRotate(a,2) ^ rightRotate(a,13) ^ rightRotate(a,22);
+      const maj = (a & b2) ^ (a & c) ^ (b2 & c);
+      const temp2 = (S0 + maj) | 0;
+      H[7]=H[6]; H[6]=H[5]; H[5]=H[4]; H[4]=(d+temp1)|0;
+      H[3]=H[2]; H[2]=H[1]; H[1]=H[0]; H[0]=(temp1+temp2)|0;
+    }
+    for (let j = 0; j < 8; j++) hash[j] = (hash[j] + H[j]) | 0;
+  }
+  for (const h of hash) {
+    result += ('00000000' + (h >>> 0).toString(16)).slice(-8);
+  }
+  return result;
+}
+
+// ── Password protection ────────────────────────────────────────────────
+const _AUTH_HASH = '20f46e17736e988e6fb93e8dacc8f4c697882212adc1406dbe0fe0394cda890f';
+
+function checkPassword() {
+  const pwd = document.getElementById('login-input').value;
+  const errEl = document.getElementById('login-error');
+  if (!pwd) { errEl.textContent = 'Please enter the password.'; return; }
+  const hex = sha256(pwd);
+  if (hex === _AUTH_HASH) {
+    document.getElementById('login-overlay').style.display = 'none';
+    sessionStorage.setItem('pc_auth', '1');
+    loadAll();
+  } else {
+    errEl.textContent = 'Incorrect password — try again.';
+    document.getElementById('login-input').value = '';
+    document.getElementById('login-input').focus();
+  }
+}
+
+// ── Boot ───────────────────────────────────────────────────────────────
+// Only auto-load if already authenticated in this session
+if (sessionStorage.getItem('pc_auth') === '1') {
+  document.getElementById('login-overlay').style.display = 'none';
+  loadAll();
+}
+// Otherwise wait for password entry (loadAll called from checkPassword)
+</script>
+</body>
+</html>
