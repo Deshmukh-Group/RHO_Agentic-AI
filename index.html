@@ -40,7 +40,9 @@ const FILE_PATHS = {
     "M0326": "./data_dashboard/M0326/Metadynamics/Analysis/FES_2D_normalized.svg",
     "A3400": "./data_dashboard/A3400/Metadynamics/Analysis/FES_2D_normalized.svg",
     "M0280": "./data_dashboard/M0280/Metadynamics/Analysis/FES_2D_normalized.svg"
-  }
+  },
+
+  minimaAnalysis: "./data_dashboard/Visual/minima_analysis.json"
 };
 </script>
 
@@ -824,6 +826,155 @@ tbody td { padding: 0.6rem 1rem; }
   flex-direction: column;
   gap: 1rem;
 }
+.meta-fes-row {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+.meta-minima-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 220px;
+  max-width: 260px;
+}
+.meta-bottom-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+.fes-minima-panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0;
+  overflow: hidden;
+}
+.minima-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background: rgba(10,138,106,0.04);
+}
+.minima-panel-title {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.minima-count-badge {
+  margin-left: auto;
+  background: rgba(10,138,106,0.12);
+  color: var(--accent);
+  border: 1px solid rgba(10,138,106,0.3);
+  border-radius: 20px;
+  padding: 1px 8px;
+  font-size: 0.65rem;
+  font-family: var(--font-mono);
+}
+.minima-table-wrap {
+  max-height: 280px;
+  overflow-y: auto;
+}
+.minima-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.72rem;
+}
+.minima-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  padding: 0.45rem 0.75rem;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--muted);
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.minima-table tbody tr {
+  border-bottom: 1px solid rgba(226,232,240,0.5);
+  transition: background 0.12s;
+}
+.minima-table tbody tr:hover { background: rgba(0,229,180,0.05); }
+.minima-table tbody td {
+  padding: 0.4rem 0.75rem;
+  font-family: var(--font-mono);
+  color: var(--text);
+}
+.minima-table tbody td:nth-child(3) {
+  font-weight: 700;
+  color: var(--accent);
+}
+.minima-stats-panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0;
+  overflow: hidden;
+}
+.minima-stats-header {
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background: rgba(37,99,235,0.04);
+}
+.minima-stats-title {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent2);
+}
+.minima-stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+}
+.minima-stat-cell {
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+}
+.minima-stat-lbl {
+  font-size: 0.6rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 3px;
+}
+.minima-stat-val {
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.minima-stat-val.highlight { color: var(--accent); }
+.minima-stat-val.lowlight  { color: var(--accent3); }
+.minima-kmeans-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.72rem;
+}
+.minima-kmeans-row span:first-child { color: var(--muted); font-family: var(--font-mono); }
+.minima-kmeans-row span:last-child { font-family: var(--font-mono); font-weight: 700; color: var(--text); }
+.no-minima-msg {
+  padding: 1.5rem 1rem;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+}
 .fes-top-row {
   display: flex;
   gap: 1rem;
@@ -1150,8 +1301,31 @@ input[type=range]::-webkit-slider-thumb {
         <div class="fes-container" id="fes-display" style="flex:1">
           <div class="fes-placeholder">← Select a monomer to view its FES plot</div>
         </div>
+
+        <!-- Minima Locations Table -->
+        <div class="fes-minima-panel" id="fes-minima-panel" style="display:none">
+          <div class="minima-panel-header">
+            <span class="minima-panel-title">⬡ Minima Locations</span>
+            <span class="minima-count-badge" id="minima-count-badge">0</span>
+          </div>
+          <div class="minima-table-wrap">
+            <table class="minima-table">
+              <thead>
+                <tr>
+                  <th>CV₁ (θ)</th>
+                  <th>CV₂ (Z)</th>
+                  <th>Depth (kJ/mol)</th>
+                </tr>
+              </thead>
+              <tbody id="minima-tbody"></tbody>
+            </table>
+          </div>
+          <div class="minima-stat-grid" id="minima-stat-grid"></div>
+        </div>
+
         <div class="fes-props-panel" id="fes-props-panel"></div>
       </div>
+
       <div class="fes-freq-panel" id="fes-freq-panel">
         <h4>Monomer Occurrence in Oligomer Library</h4>
         <div id="fes-freq-content"></div>
@@ -1419,6 +1593,7 @@ let sortCol = 'predicted_docking_score', sortDir = 1;
 let chartsBuilt = false;
 let analyticsClass = 'all', analyticsMaxMono = 28, logpMin = -10, logpMax = 10;
 let chartFluor, chartDock, chartMonoFreq, chartMonoCount, chartKmeans;
+let MINIMA_DATA = {};  // minima_analysis.json keyed by Monomer id
 
 // ── Tab switching ──────────────────────────────────────────────────────
 function switchTab(id, btn) {
@@ -1439,12 +1614,19 @@ function switchTab(id, btn) {
 // ── Load all data ──────────────────────────────────────────────────────
 async function loadAll() {
   try {
-    const [smilesResp, featResp] = await Promise.all([
+    const [smilesResp, featResp, minimaResp] = await Promise.all([
       fetch(FILE_PATHS.monomerSmiles),
-      fetch(FILE_PATHS.monomerFeatures)
+      fetch(FILE_PATHS.monomerFeatures),
+      fetch(FILE_PATHS.minimaAnalysis)
     ]);
     SMILES = await smilesResp.json();
     FEATURES = await featResp.json();
+
+    const minimaList = await minimaResp.json();
+    minimaList.forEach(entry => {
+      MINIMA_DATA[entry.Monomer] = entry;
+    });
+    console.log('[Minima] Loaded data for', Object.keys(MINIMA_DATA).length, 'monomers');
 
     // Load all oligomer CSV files and store them separately
     const filePromises = FILE_PATHS.oligomerFiles.map((fileInfo, idx) => 
@@ -1774,6 +1956,66 @@ function renderFesFrequency(id) {
   `;
 }
 
+function renderMinimaAnalysis(id) {
+  const data = MINIMA_DATA[id];
+  const minimaPanel = document.getElementById('fes-minima-panel');
+
+  if (!data || !data.minima_below_vmax || data.minima_below_vmax.length === 0) {
+    minimaPanel.style.display = 'none';
+    return;
+  }
+
+  minimaPanel.style.display = 'block';
+
+  const minima = data.minima_below_vmax;
+  const stats = data['Minima Value Statistics'] || {};
+  const kmeans = data.KMeans || {};
+  const minVal = stats.min_minima ?? 0;
+  const maxVal = stats.max_minima ?? 0;
+  const range = Math.abs(maxVal - minVal) || 1;
+
+  document.getElementById('minima-count-badge').textContent = `${minima.length} minima`;
+
+  const tbody = document.getElementById('minima-tbody');
+  tbody.innerHTML = minima.map(coordStr => {
+    const parts = coordStr.split(',');
+    if (parts.length !== 3) return '';
+    const [cv1, cv2, depth] = parts;
+    const cv1n = parseFloat(cv1).toFixed(2);
+    const cv2n = parseFloat(cv2).toFixed(1);
+    const depthN = parseFloat(depth).toFixed(3);
+    return `<tr>
+      <td>${cv1n}</td>
+      <td>${cv2n}</td>
+      <td>${depthN}</td>
+    </tr>`;
+  }).join('');
+
+  const avgN = stats.avg_minima_value != null ? stats.avg_minima_value.toFixed(3) : '—';
+  const medN = stats.median_minima_value != null ? stats.median_minima_value.toFixed(3) : '—';
+  const minN = stats.min_minima != null ? stats.min_minima.toFixed(3) : '—';
+  const maxN = stats.max_minima != null ? stats.max_minima.toFixed(3) : '—';
+
+  document.getElementById('minima-stat-grid').innerHTML = `
+    <div class="minima-stat-cell">
+      <div class="minima-stat-lbl">Avg Depth</div>
+      <div class="minima-stat-val highlight">${avgN}</div>
+    </div>
+    <div class="minima-stat-cell">
+      <div class="minima-stat-lbl">Median Depth</div>
+      <div class="minima-stat-val">${medN}</div>
+    </div>
+    <div class="minima-stat-cell">
+      <div class="minima-stat-lbl">Deepest Minimum</div>
+      <div class="minima-stat-val highlight">${minN}</div>
+    </div>
+    <div class="minima-stat-cell">
+      <div class="minima-stat-lbl">K-Means Clusters (k)</div>
+      <div class="minima-stat-val">${kmeans.optimal_k != null ? kmeans.optimal_k : '—'}</div>
+    </div>
+  `;
+}
+
 function loadFES(id) {
   const path = FILE_PATHS.metadynamics[id];
   const display = document.getElementById('fes-display');
@@ -1789,6 +2031,7 @@ function loadFES(id) {
     </div>`;
   renderFesProps(id);
   renderFesFrequency(id);
+  renderMinimaAnalysis(id);
 }
 
 function showFESError(imgEl, id, path) {
