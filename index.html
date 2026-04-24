@@ -18,6 +18,8 @@ const FILE_PATHS = {
     { name: "High Target",          path: "./data_dashboard/Visual/mlp_inference_results_high_target.csv",         version: "2" },
     { name: "Low Target",           path: "./data_dashboard/Visual/mlp_inference_results_low_target.csv",          version: "2" },
     { name: "High Target (Explore)",path: "./data_dashboard/Visual/mlp_inference_results_high_target_Explore.csv", version: "2" },
+    { name: "High Target (Expt)",   path: "./data_dashboard/Visual/mlp_inference_high_target_expt.csv",            version: "2" },
+    { name: "Experiment",           path: "./data_dashboard/Visual/mlp_inference_expt.csv",                        version: "2" },
   ],
   loadAllOligoFiles: true,
 
@@ -1264,7 +1266,14 @@ input[type=range]::-webkit-slider-thumb {
       </div>
     </div>
     <div class="chart-card">
-      <h3>Top Monomers by Frequency <span id="mono-freq-legend" style="font-weight:normal;font-size:0.6rem;color:var(--muted)"></span></h3>
+      <h3>Top Monomers by Count <span id="mono-count-legend" style="font-weight:normal;font-size:0.6rem;color:var(--muted)"></span></h3>
+      <div style="padding:0 0 0.35rem;font-family:var(--font-mono);font-size:0.65rem;color:var(--muted)">
+        Average count per composition where the monomer appears
+      </div>
+      <div class="chart-wrap"><canvas id="chart-mono-count"></canvas></div>
+      <div style="margin-top:1rem;padding-top:0.75rem;border-top:1px solid var(--border)">
+        <h3 style="margin:0 0 0.35rem">Top Monomers by Frequency <span id="mono-freq-legend" style="font-weight:normal;font-size:0.6rem;color:var(--muted)"></span></h3>
+      </div>
       <div class="chart-wrap"><canvas id="chart-mono-freq"></canvas></div>
     </div>
 
@@ -1409,7 +1418,7 @@ let flourFilter = 'all', classFilter = 'all', maxMonomers = 28;
 let sortCol = 'predicted_docking_score', sortDir = 1;
 let chartsBuilt = false;
 let analyticsClass = 'all', analyticsMaxMono = 28, logpMin = -10, logpMax = 10;
-let chartFluor, chartDock, chartMonoFreq, chartKmeans;
+let chartFluor, chartDock, chartMonoFreq, chartMonoCount, chartKmeans;
 
 // ── Tab switching ──────────────────────────────────────────────────────
 function switchTab(id, btn) {
@@ -1504,10 +1513,12 @@ async function loadAll() {
     
     await Promise.all(filePromises);
     
-    // Create merged dataset
+    // Create merged dataset (include all except Experiment and High Target Expt)
     const allOligomers = [];
-    Object.values(oligomerFileData).forEach(fileData => {
-      allOligomers.push(...fileData);
+    Object.entries(oligomerFileData).forEach(([fileName, fileData]) => {
+      if (fileName !== 'Experiment' && fileName !== 'High Target (Expt)' && fileName !== 'Merged (All Files)') {
+        allOligomers.push(...fileData);
+      }
     });
     oligomerFileData['Merged (All Files)'] = allOligomers;
     OLIGOMERS = allOligomers;
@@ -2030,14 +2041,13 @@ function switchOligoFile(fileName) {
   }
 
   currentOligoFile = fileName;
+  monomerCols = [];  // Clear cached monomer columns when switching files
   
   if (fileName === 'Merged (All Files)') {
     OLIGOMERS = oligomerFileData['Merged (All Files)'];
   } else {
     OLIGOMERS = oligomerFileData[fileName];
   }
-  
-   // Debug: Check first row's fluorescence
    console.log('Sample fluorescence values:', OLIGOMERS.slice(0,5).map(r => r.fluorescence));
    console.log('Unique fluorescence values:', [...new Set(OLIGOMERS.map(r => r.fluorescence))].sort());
    
@@ -2060,14 +2070,15 @@ function switchOligoFile(fileName) {
 }
 
 function switchAnalyticsFile(fileName) {
+  monomerCols = [];  // Clear cached monomer columns when switching files
   if (fileName === 'Merged (All Files)') {
     OLIGOMERS = oligomerFileData['Merged (All Files)'];
   } else {
     OLIGOMERS = oligomerFileData[fileName];
   }
-  
+
   // Destroy existing charts before rebuilding
-  [chartFluor, chartDock, chartMonoFreq, chartKmeans].forEach(c => { if(c) c.destroy(); });
+  [chartFluor, chartDock, chartMonoFreq, chartMonoCount, chartKmeans].forEach(c => { if(c) c.destroy(); });
   buildCharts();
   buildViolinChart();
   rebuildKmeans();
@@ -2240,6 +2251,55 @@ function buildCharts() {
           const isHydro = (feat.logp ?? 0) > 2;
           const type = charge>0?'Positive':charge<0?'Negative':isHydro?'Hydrophobic':'Neutral';
           return [`Count: ${ctx.parsed.x}`, `Type: ${type}`, `logP: ${feat.logp?.toFixed(2)??'—'}`];
+        }
+      }}}
+    }
+  });
+
+  // Monomer count (average count per composition where present)
+  const countSum = {};
+  const countCompounds = {};
+  data.forEach(row => {
+    cols.forEach(c => {
+      const v = parseFloat(row[c]||0);
+      if (v > 0) {
+        countSum[c] = (countSum[c]||0) + v;
+        countCompounds[c] = (countCompounds[c]||0) + 1;
+      }
+    });
+  });
+  const avgCount = {};
+  Object.keys(countSum).forEach(c => {
+    avgCount[c] = countSum[c] / (countCompounds[c]||1);
+  });
+  const sortedAvgCount = Object.entries(avgCount).sort((a,b)=>b[1]-a[1]).slice(0,15);
+  const countColors = sortedAvgCount.map(([id]) => {
+    const feat = FEATURES[id] || {};
+    const charge = feat.charge ?? 0;
+    const isHydro = (feat.logp ?? 0) > 2;
+    return charge > 0 ? 'rgba(22,163,74,0.7)' : charge < 0 ? 'rgba(220,38,38,0.65)' : isHydro ? 'rgba(217,119,6,0.65)' : 'rgba(37,99,235,0.6)';
+  });
+  chartMonoCount = new Chart(document.getElementById('chart-mono-count'), {
+    type: 'bar',
+    data: {
+      labels: sortedAvgCount.map(([id]) => id),
+      datasets: [{
+        label: 'Average Count',
+        data: sortedAvgCount.map(([,n]) => n),
+        backgroundColor: countColors,
+        borderRadius: 5,
+        barThickness: 10,
+      }]
+    },
+    options: { ...chartOptions('Monomer', 'Average Count per Composition'), indexAxis: 'y',
+      plugins: { legend: { display: false }, tooltip: { callbacks: {
+        label: ctx => {
+          const id = sortedAvgCount[ctx.dataIndex]?.[0];
+          const feat = FEATURES[id] || {};
+          const charge = feat.charge ?? 0;
+          const isHydro = (feat.logp ?? 0) > 2;
+          const type = charge>0?'Positive':charge<0?'Negative':isHydro?'Hydrophobic':'Neutral';
+          return [`Average Count: ${ctx.parsed.x.toFixed(2)}`, `Type: ${type}`, `Total: ${countSum[id]?.toFixed(1)??'—'}`, `Compositions: ${countCompounds[id]??0}`];
         }
       }}}
     }
