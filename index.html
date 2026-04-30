@@ -412,6 +412,80 @@ nav button.active {
 .filter-btn.active-low  { border-color: var(--low);  color: var(--low);  background: rgba(255,107,107,0.08); }
 .filter-btn.active      { border-color: var(--accent2); color: var(--accent2); background: rgba(91,143,255,0.08); }
 
+/* ── Monomer block filter ── */
+.mono-block-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.6rem 1rem;
+}
+.mono-block-inputs {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.mono-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.mono-block-label {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--muted);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.mono-block input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text);
+  width: 80px;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.mono-block input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(10,138,106,0.12);
+}
+.mono-block input::placeholder { color: var(--muted); opacity: 0.6; }
+.mono-block-sep {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--muted);
+  padding: 0 2px;
+  margin-top: 10px;
+}
+.mono-block-clear {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--muted);
+  cursor: pointer;
+  margin-left: auto;
+  transition: all 0.15s;
+}
+.mono-block-clear:hover {
+  border-color: var(--accent3);
+  color: var(--accent3);
+  background: rgba(220,38,38,0.05);
+}
+
 .stats-row {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -1369,6 +1443,33 @@ input[type=range]::-webkit-slider-thumb {
     </div>
   </div>
 
+  <!-- Monomer Block Filter (M1-[]-M2-[]-M3-M4-[]) -->
+  <div class="mono-block-filter">
+    <span class="filter-label" style="margin-right:0.25rem">MONOMER BLOCKS:</span>
+    <div class="mono-block-inputs">
+      <div class="mono-block">
+        <span class="mono-block-label">M1</span>
+        <input type="text" id="mb-m1" placeholder="any" oninput="updateMonoBlockFilter()">
+      </div>
+      <span class="mono-block-sep">—</span>
+      <div class="mono-block">
+        <span class="mono-block-label">M2</span>
+        <input type="text" id="mb-m2" placeholder="any" oninput="updateMonoBlockFilter()">
+      </div>
+      <span class="mono-block-sep">—</span>
+      <div class="mono-block">
+        <span class="mono-block-label">M3</span>
+        <input type="text" id="mb-m3" placeholder="any" oninput="updateMonoBlockFilter()">
+      </div>
+      <span class="mono-block-sep">—</span>
+      <div class="mono-block">
+        <span class="mono-block-label">M4</span>
+        <input type="text" id="mb-m4" placeholder="any" oninput="updateMonoBlockFilter()">
+      </div>
+    </div>
+    <button class="mono-block-clear" onclick="clearMonoBlockFilter()" title="Clear monomer block filters">Clear</button>
+  </div>
+
   <div class="stats-row" id="stats-row"></div>
   <div class="oligo-table-wrap">
     <table>
@@ -1600,6 +1701,7 @@ let SMILES = {}, FEATURES = {}, OLIGOMERS = [];
 let oligomerFileData = {};  // Store data for each file: { "fileName": [...rows], ... }
 let currentOligoFile = 'merged';  // Track currently displayed file ('merged' or file index)
 let flourFilter = 'all', classFilter = 'all', maxMonomers = 28;
+let monoBlockFilters = { m1: '', m2: '', m3: '', m4: '' };
 let sortCol = 'predicted_docking_score', sortDir = 1;
 let chartsBuilt = false;
 let analyticsClass = 'all', analyticsMaxMono = 28, logpMin = -10, logpMax = 10;
@@ -2126,6 +2228,18 @@ function getFilteredOligomers() {
     // Max monomers filter
     if (numMono > maxMonomers) return false;
 
+    // Monomer block filter
+    const presentMonos = cols.filter(c => parseFloat(row[c] || 0) > 0);
+    const m1 = (monoBlockFilters.m1 || '').trim().toLowerCase();
+    const m2 = (monoBlockFilters.m2 || '').trim().toLowerCase();
+    const m3 = (monoBlockFilters.m3 || '').trim().toLowerCase();
+    const m4 = (monoBlockFilters.m4 || '').trim().toLowerCase();
+
+    if (m1 && !presentMonos.some(id => id.toLowerCase() === m1)) return false;
+    if (m2 && !presentMonos.some(id => id.toLowerCase() === m2)) return false;
+    if (m3 && !presentMonos.some(id => id.toLowerCase() === m3)) return false;
+    if (m4 && !presentMonos.some(id => id.toLowerCase() === m4)) return false;
+
     return true;
   });
 }
@@ -2312,12 +2426,17 @@ function switchOligoFile(fileName) {
   sortCol = 'predicted_docking_score';
   sortDir = 1;
   maxMonomers = 28;
+  monoBlockFilters = { m1: '', m2: '', m3: '', m4: '' };
   document.getElementById('mono-slider').value = 28;
   document.getElementById('mono-val').textContent = 28;
   document.getElementById('fb-all').classList.add('active');
   document.getElementById('fb-high').classList.remove('active');
   document.getElementById('fb-med').classList.remove('active');
   document.getElementById('fb-low').classList.remove('active');
+  document.getElementById('mb-m1').value = '';
+  document.getElementById('mb-m2').value = '';
+  document.getElementById('mb-m3').value = '';
+  document.getElementById('mb-m4').value = '';
   
   // Rebuild oligomer display
   buildOligomers();
@@ -2362,6 +2481,24 @@ function setClassFilter(val, btn) {
 function setMaxMonomers(val) {
   maxMonomers = parseInt(val);
   document.getElementById('mono-val').textContent = val;
+  buildOligomers();
+}
+
+// ── Monomer block filter (M1-M4) ────────────────────────────────────────
+function updateMonoBlockFilter() {
+  monoBlockFilters.m1 = document.getElementById('mb-m1').value || '';
+  monoBlockFilters.m2 = document.getElementById('mb-m2').value || '';
+  monoBlockFilters.m3 = document.getElementById('mb-m3').value || '';
+  monoBlockFilters.m4 = document.getElementById('mb-m4').value || '';
+  buildOligomers();
+}
+
+function clearMonoBlockFilter() {
+  document.getElementById('mb-m1').value = '';
+  document.getElementById('mb-m2').value = '';
+  document.getElementById('mb-m3').value = '';
+  document.getElementById('mb-m4').value = '';
+  monoBlockFilters = { m1: '', m2: '', m3: '', m4: '' };
   buildOligomers();
 }
 
