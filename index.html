@@ -1498,9 +1498,9 @@ input[type=range]::-webkit-slider-thumb {
 
     <div class="filter-group">
       <button class="filter-btn active" id="afc-all"  onclick="setAnalyticsClass('all',this)">All</button>
-      <button class="filter-btn" id="afc-0"   onclick="setAnalyticsClass('0',this)">Low</button>
-      <button class="filter-btn" id="afc-1"   onclick="setAnalyticsClass('1',this)">Medium</button>
-      <button class="filter-btn" id="afc-2"   onclick="setAnalyticsClass('2',this)">High</button>
+      <button class="filter-btn" id="afc-0"   onclick="setAnalyticsClass('Low',this)">Low</button>
+      <button class="filter-btn" id="afc-1"   onclick="setAnalyticsClass('Medium',this)">Medium</button>
+      <button class="filter-btn" id="afc-2"   onclick="setAnalyticsClass('High',this)">High</button>
     </div>
 
     <div class="filter-group">
@@ -1778,11 +1778,15 @@ async function loadAll() {
                 const s = parseFloat(row[scoreIdx]);
                 obj.fluorescence = s === 0 ? 'High' : s <= 4 ? 'Medium' : 'Low';
               }
-              // Normalize fluorescence to be consistent with Consensus_Class
-              // (some CSVs have inverted fluorescence strings relative to class)
-              const cc = parseInt(obj['Consensus_Class']);
-              if (!isNaN(cc)) {
-                obj.fluorescence = cc === 2 ? 'High' : cc === 1 ? 'Medium' : 'Low';
+              // Fallback: derive fluorescence from Consensus_Class only when the CSV
+              // has no fluorescence column. Files with a fluorescence column already
+              // encode the correct labels (Low Target has an inverted Class mapping so
+              // overriding it here would produce the wrong High/Low assignments).
+              if (!hasFluor) {
+                const cc = parseInt(obj['Consensus_Class']);
+                if (!isNaN(cc)) {
+                  obj.fluorescence = cc === 2 ? 'High' : cc === 1 ? 'Medium' : 'Low';
+                }
               }
               // Pre-compute chemistry properties for sorting and display
               const dp = parseFloat(obj['DP']) || 1;
@@ -2025,25 +2029,25 @@ function renderFesFrequency(id) {
   const content = document.getElementById('fes-freq-content');
   panel.style.display = 'block';
 
-  // Count per class
-  const classCounts = { '0': 0, '1': 0, '2': 0 };
-  const classTotal  = { '0': 0, '1': 0, '2': 0 };
+  // Count per fluorescence class
+  const classCounts = { 'Low': 0, 'Medium': 0, 'High': 0 };
+  const classTotal  = { 'Low': 0, 'Medium': 0, 'High': 0 };
   let totalAppear = 0, totalOligos = 0;
 
   OLIGOMERS.forEach(row => {
     if ((row[id] || 0) <= 0) return;
     totalAppear++;
-    const cls = String(row['Consensus_Class']);
+    const cls = row.fluorescence;
     if (cls in classCounts) classCounts[cls]++;
   });
   Object.keys(classTotal).forEach(cls => {
-    classTotal[cls] = OLIGOMERS.filter(r => String(r['Consensus_Class']) === cls).length;
+    classTotal[cls] = OLIGOMERS.filter(r => r.fluorescence === cls).length;
   });
   totalOligos = OLIGOMERS.length;
 
   const freq = totalOligos ? ((totalAppear / totalOligos) * 100).toFixed(1) : 0;
-  const classLabels = { '0': 'Low', '1': 'Medium', '2': 'High' };
-  const classColors = { '0': '#dc2626', '1': '#d97706', '2': '#16a34a' };
+  const classLabels = { 'Low': 'Low', 'Medium': 'Medium', 'High': 'High' };
+  const classColors = { 'Low': '#dc2626', 'Medium': '#d97706', 'High': '#16a34a' };
 
   const rows = Object.entries(classCounts).map(([cls, cnt]) => {
     const pct = classTotal[cls] ? ((cnt / classTotal[cls]) * 100).toFixed(1) : 0;
@@ -2515,7 +2519,7 @@ function sortBy(col) {
 function getAnalyticsOligomers() {
   const cols = getMonomerCols();
   return OLIGOMERS.filter(row => {
-    const cls = String(row['Consensus_Class']);
+    const cls = row.fluorescence;
     const numMono = cols.filter(c => (row[c]||0)>0).length;
     if (analyticsClass !== 'all' && cls !== analyticsClass) return false;
     if (numMono > analyticsMaxMono) return false;
@@ -2907,7 +2911,7 @@ function rebuildKmeans() {
   const { labels, centroids } = kMeans(pts, k);
 
   const CLUSTER_COLORS = ['rgba(10,138,106,0.6)','rgba(37,99,235,0.6)','rgba(220,38,38,0.55)','rgba(217,119,6,0.65)','rgba(124,58,237,0.6)'];
-  const CLASS_COLORS3 = { '0':'rgba(220,38,38,0.55)','1':'rgba(217,119,6,0.6)','2':'rgba(22,163,74,0.6)' };
+  const CLASS_COLORS3 = { 'Low':'rgba(220,38,38,0.55)','Medium':'rgba(217,119,6,0.6)','High':'rgba(22,163,74,0.6)' };
 
   const clusterSets = Array.from({length:k},(_,ci)=>({
     label: `Cluster ${ci+1}`,
@@ -2965,7 +2969,7 @@ function buildPairPlot() {
     { key: 'predicted_docking_score', label: 'Docking Score' },
     { key: 'DP', label: 'DP' }
   ];
-  const CLASS_COLORS3 = { '0':'rgba(220,38,38,0.5)','1':'rgba(217,119,6,0.55)','2':'rgba(22,163,74,0.55)' };
+  const CLASS_COLORS3 = { 'Low':'rgba(220,38,38,0.5)','Medium':'rgba(217,119,6,0.55)','High':'rgba(22,163,74,0.55)' };
 
   vars.forEach((vy, ri) => {
     vars.forEach((vx, ci) => {
@@ -2996,9 +3000,9 @@ function buildPairPlot() {
         cell.innerHTML = `<canvas id="${canvasId}" style="width:100%;height:100%"></canvas>`;
         container.appendChild(cell);
         setTimeout(() => {
-          const sets = ['0','1','2'].map(cls => ({
-            label: cls==='2'?'High':cls==='1'?'Med':'Low',
-            data: data.filter(r=>String(r['Consensus_Class'])===cls).map(r=>({x:r[vx.key],y:r[vy.key]})),
+          const sets = ['Low','Medium','High'].map(cls => ({
+            label: cls === 'Medium' ? 'Med' : cls,
+            data: data.filter(r=>r.fluorescence===cls).map(r=>({x:r[vx.key],y:r[vy.key]})),
             backgroundColor: CLASS_COLORS3[cls],
             pointRadius: 2, pointHoverRadius: 4
           }));
@@ -3042,10 +3046,9 @@ function showOligoTooltip(e, row) {
   const monoMap = cols.filter(c => (row[c]||0) > 0).map(c => ({ id: c, cnt: row[c] }));
   const dock = parseFloat(row['predicted_docking_score']);
   const score = row['fluorescence'];
-  const cls = String(row['Consensus_Class']);
-  const clsLabel = cls === '2' ? 'High' : cls === '1' ? 'Medium' : 'Low';
+  const clsLabel = row.fluorescence || 'Low';
   const dockColor = dock <= -8.78 ? '#0a8a6a' : dock <= -8.7 ? '#d97706' : '#dc2626';
-  const clsColor  = cls === '2' ? '#15803d' : cls === '1' ? '#92400e' : '#b91c1c';
+  const clsColor  = clsLabel === 'High' ? '#15803d' : clsLabel === 'Medium' ? '#92400e' : '#b91c1c';
 
   // Chips
   const chips = monoMap.map(m => {
@@ -3134,10 +3137,9 @@ function openOligoPopup(row) {
   const monoMap = cols.filter(c => (row[c]||0) > 0).map(c => ({ id: c, cnt: row[c] }));
   const dock = parseFloat(row['predicted_docking_score']);
   const score = row['fluorescence'];
-  const cls = String(row['Consensus_Class']);
-  const clsLabel = cls === '2' ? 'High' : cls === '1' ? 'Medium' : 'Low';
+  const clsLabel = row.fluorescence || 'Low';
   const dockColor = dock <= -8.78 ? '#0a8a6a' : dock <= -8.7 ? '#d97706' : '#dc2626';
-  const clsColor  = cls === '2' ? '#15803d' : cls === '1' ? '#92400e' : '#b91c1c';
+  const clsColor  = clsLabel === 'High' ? '#15803d' : clsLabel === 'Medium' ? '#92400e' : '#b91c1c';
 
   const chips = monoMap.map(m => {
     const feat = FEATURES[m.id] || {};
@@ -3361,9 +3363,9 @@ function buildSynthesisCandidates() {
   const FIXED_SEED = 0x52484F4D; // "RHOM" in ASCII — same compounds every run
   const PCA_FEATS = ['predicted_docking_score', 'avgLogP', 'meanTPSA', 'totalMW', 'DP'];
 
-  // Separate by fluorescence class (Consensus_Class already normalised at parse time)
-  const highData = sourceData.filter(r => isFinite(+r['predicted_docking_score']) && String(r['Consensus_Class']) === '2');
-  const lowData  = sourceData.filter(r => isFinite(+r['predicted_docking_score']) && String(r['Consensus_Class']) === '0');
+  // Separate by fluorescence label (already correctly set at parse time for all files)
+  const highData = sourceData.filter(r => isFinite(+r['predicted_docking_score']) && r.fluorescence === 'High');
+  const lowData  = sourceData.filter(r => isFinite(+r['predicted_docking_score']) && r.fluorescence === 'Low');
 
   // Convex hull (gift-wrapping / Jarvis march)
   function convexHull(pts) {
@@ -3473,17 +3475,17 @@ function buildSynthesisCandidates() {
     ...hullDatasets,
     {
       label: 'High Fluor. (class 2)',
-      data: allTagged.filter(r => String(r['Consensus_Class']) === '2').map(r => ({ x: r._pc1, y: r._pc2 })),
+      data: allTagged.filter(r => r.fluorescence === 'High').map(r => ({ x: r._pc1, y: r._pc2 })),
       backgroundColor: 'rgba(22,163,74,0.35)', pointRadius: 2.5, pointHoverRadius: 4, order: 5
     },
     {
       label: 'Medium Fluor. (class 1)',
-      data: allTagged.filter(r => String(r['Consensus_Class']) === '1').map(r => ({ x: r._pc1, y: r._pc2 })),
+      data: allTagged.filter(r => r.fluorescence === 'Medium').map(r => ({ x: r._pc1, y: r._pc2 })),
       backgroundColor: 'rgba(217,119,6,0.35)', pointRadius: 2.5, pointHoverRadius: 4, order: 5
     },
     {
       label: 'Low Fluor. (class 0)',
-      data: allTagged.filter(r => String(r['Consensus_Class']) === '0').map(r => ({ x: r._pc1, y: r._pc2 })),
+      data: allTagged.filter(r => r.fluorescence === 'Low').map(r => ({ x: r._pc1, y: r._pc2 })),
       backgroundColor: 'rgba(220,38,38,0.30)', pointRadius: 2.5, pointHoverRadius: 4, order: 5
     },
     {
@@ -3539,7 +3541,7 @@ function buildSynthesisCandidates() {
   const leg = document.getElementById('pca-cluster-legend');
   leg.innerHTML = [
     ['#16a34a', `High fluorescence pool: ${highData.length}`],
-    ['#d97706', `Medium fluorescence pool: ${sourceData.filter(r=>String(r['Consensus_Class'])==='1').length}`],
+    ['#d97706', `Medium fluorescence pool: ${sourceData.filter(r=>r.fluorescence==='Medium').length}`],
     ['#dc2626', `Low fluorescence pool: ${lowData.length}`],
   ].map(([c, txt]) =>
     `<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.68rem;font-family:var(--font-mono);background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:2px 8px">
